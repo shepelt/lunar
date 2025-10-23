@@ -1,0 +1,70 @@
+_format_version: "3.0"
+
+services:
+  - name: lunar-backend
+    host: host.docker.internal
+    port: 3000
+    protocol: http
+    routes:
+      - name: backend-api
+        paths:
+          - /api
+        strip_path: false
+        plugins:
+          - name: key-auth
+            config:
+              key_names:
+                - apikey
+              key_in_header: true
+              key_in_query: true
+              hide_credentials: false
+
+  - name: llm-service
+    url: http://localhost:32000
+    routes:
+      - name: llm-proxy
+        paths:
+          - /llm
+        strip_path: true
+        preserve_host: false
+        protocols:
+          - http
+          - https
+        plugins:
+          - name: key-auth
+            config:
+              key_names:
+                - apikey
+              key_in_header: true
+              key_in_query: true
+              hide_credentials: false
+          - name: lunar-gateway
+            config:
+              backend_url: http://host.docker.internal:3000
+          - name: ai-proxy
+            config:
+              route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: "Bearer ${OPENAI_API_KEY}"
+              model:
+                provider: openai
+                name: gpt-5
+                options:
+                  temperature: 1.0
+          - name: cors
+            config:
+              origins:
+                - http://localhost:3000
+              methods:
+                - GET
+                - POST
+                - OPTIONS
+              headers:
+                - Content-Type
+                - Authorization
+                - apikey
+              exposed_headers:
+                - X-Kong-Request-Id
+              credentials: true
+              max_age: 3600

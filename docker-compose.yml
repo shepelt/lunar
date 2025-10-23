@@ -1,0 +1,108 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: lunar-postgres
+    environment:
+      POSTGRES_USER: kong
+      POSTGRES_PASSWORD: kongpass
+      POSTGRES_DB: kong
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - lunar-network
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "kong"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kong-migrations:
+    image: kong:latest
+    container_name: lunar-kong-migrations
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: postgres
+      KONG_PG_PORT: 5432
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kongpass
+      KONG_PG_DATABASE: kong
+    command: kong migrations bootstrap
+    networks:
+      - lunar-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+
+  kong:
+    image: kong:latest
+    container_name: lunar-kong
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: postgres
+      KONG_PG_PORT: 5432
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kongpass
+      KONG_PG_DATABASE: kong
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: '0.0.0.0:8001'
+      KONG_PROXY_LISTEN: '0.0.0.0:8000'
+      KONG_ADMIN_GUI_URL: 'http://localhost:8002'
+      # Custom Lua Plugins
+      KONG_PLUGINS: bundled,lunar-gateway
+      KONG_LUA_PACKAGE_PATH: /usr/local/kong/custom-plugins/?.lua;/usr/local/kong/custom-plugins/?/init.lua;;
+      # Pass OpenAI API key for lunar-gateway plugin
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # Disable nginx gzip compression
+      KONG_NGINX_HTTP_GZIP: off
+    ports:
+      - "8000:8000"  # Proxy port
+      - "8001:8001"  # Admin API port
+    volumes:
+      - ./kong-plugins:/usr/local/kong/custom-plugins:ro
+    networks:
+      - lunar-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kong-migrations:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kong-provisioner:
+    image: alpine:latest
+    container_name: lunar-kong-provisioner
+    volumes:
+      - ./kong/kong.yaml:/kong-template.yaml:ro
+      - ./kong/provision.sh:/provision.sh:ro
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DECK_VERSION: v1.41.1
+    command: >
+      sh -c "
+        apk add --no-cache curl gettext &&
+        curl -sL https://github.com/kong/deck/releases/download/$${DECK_VERSION}/deck_$${DECK_VERSION#v}_linux_amd64.tar.gz | tar -xz -C /usr/local/bin &&
+        /provision.sh
+      "
+    networks:
+      - lunar-network
+    depends_on:
+      kong:
+        condition: service_healthy
+    restart: on-failure
+
+volumes:
+  postgres-data:
+
+networks:
+  lunar-network:
+    driver: bridge
