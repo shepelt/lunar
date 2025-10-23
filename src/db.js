@@ -39,8 +39,39 @@ export async function initDatabase() {
         total_tokens INTEGER,
         cost DECIMAL(10,6),
         status TEXT,
+        request_data TEXT,
+        response_data TEXT,
+        request_hash TEXT,
+        response_hash TEXT,
         created_at TIMESTAMP DEFAULT NOW()
       )
+    `);
+
+    // Add new columns if they don't exist (for existing databases)
+    await pool.query(`
+      DO $$
+      BEGIN
+        BEGIN
+          ALTER TABLE usage_logs ADD COLUMN request_data TEXT;
+        EXCEPTION
+          WHEN duplicate_column THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE usage_logs ADD COLUMN response_data TEXT;
+        EXCEPTION
+          WHEN duplicate_column THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE usage_logs ADD COLUMN request_hash TEXT;
+        EXCEPTION
+          WHEN duplicate_column THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE usage_logs ADD COLUMN response_hash TEXT;
+        EXCEPTION
+          WHEN duplicate_column THEN NULL;
+        END;
+      END $$;
     `);
 
     // Create index for faster lookups

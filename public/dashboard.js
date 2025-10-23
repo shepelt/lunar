@@ -1,6 +1,34 @@
 // Dashboard state
 let refreshInterval;
 
+// Copy to clipboard fallback (works without HTTPS)
+function copyToClipboardFallback(text, button) {
+  const textArea = document.createElement('textarea');
+  textArea.value = text;
+  textArea.style.position = 'fixed';
+  textArea.style.left = '-999999px';
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+
+  try {
+    const successful = document.execCommand('copy');
+    if (successful) {
+      button.textContent = '✅ Copied!';
+      setTimeout(() => button.textContent = '📋 Copy API Key', 2000);
+    } else {
+      button.textContent = '❌ Copy failed';
+      setTimeout(() => button.textContent = '📋 Copy API Key', 2000);
+    }
+  } catch (err) {
+    console.error('Fallback: Could not copy text', err);
+    button.textContent = '❌ Copy failed';
+    setTimeout(() => button.textContent = '📋 Copy API Key', 2000);
+  }
+
+  document.body.removeChild(textArea);
+}
+
 // Format currency
 function formatCurrency(value) {
   return '$' + (value || 0).toFixed(4);
@@ -366,9 +394,19 @@ document.addEventListener('DOMContentLoaded', () => {
       copyBtn.textContent = '📋 Copy API Key';
       copyBtn.className = 'mt-2 px-3 py-1 bg-white border border-green-600 text-green-700 rounded hover:bg-green-50 transition-colors font-medium';
       copyBtn.onclick = () => {
-        navigator.clipboard.writeText(result.api_key);
-        copyBtn.textContent = '✅ Copied!';
-        setTimeout(() => copyBtn.textContent = '📋 Copy API Key', 2000);
+        // Try modern clipboard API first, fallback to older method
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(result.api_key).then(() => {
+            copyBtn.textContent = '✅ Copied!';
+            setTimeout(() => copyBtn.textContent = '📋 Copy API Key', 2000);
+          }).catch(() => {
+            // Fallback if clipboard API fails
+            copyToClipboardFallback(result.api_key, copyBtn);
+          });
+        } else {
+          // Fallback for older browsers or non-HTTPS
+          copyToClipboardFallback(result.api_key, copyBtn);
+        }
       };
       messageDiv.appendChild(copyBtn);
 
@@ -386,25 +424,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // LLM Test functionality
 async function testLLM(apiKey, prompt) {
-  const response = await fetch('http://localhost:8000/llm/v1/chat/completions', {
+  // Call backend proxy (same origin, no CORS issues)
+  const response = await fetch('/api/llm-proxy', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'apikey': apiKey
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      messages: [
-        { role: 'user', content: prompt }
-      ]
+      api_key: apiKey,
+      prompt: prompt
     })
   });
 
+  const data = await response.json();
+
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`LLM request failed (${response.status}): ${errorText}`);
+    throw new Error(`LLM request failed (${response.status}): ${data.error || JSON.stringify(data)}`);
   }
 
-  return await response.json();
+  return data;
 }
 
 // LLM Test button handler

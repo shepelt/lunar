@@ -365,6 +365,47 @@ router.delete('/admin/consumers/:consumer_id', async (req, res) => {
   }
 });
 
+// Proxy LLM requests (for dashboard testing)
+router.post('/llm-proxy', async (req, res) => {
+  try {
+    const { api_key, prompt } = req.body;
+
+    if (!api_key) {
+      return res.status(400).json({ error: 'API key is required' });
+    }
+
+    if (!prompt) {
+      return res.status(400).json({ error: 'Prompt is required' });
+    }
+
+    const kongUrl = process.env.KONG_GATEWAY_URL || 'http://localhost:8000';
+
+    // Forward request to Kong
+    const response = await fetch(`${kongUrl}/llm/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': api_key
+      },
+      body: JSON.stringify({
+        messages: [
+          { role: 'user', content: prompt }
+        ]
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(response.status).json(data);
+    }
+
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get AI Proxy status from Kong
 router.get('/ai-proxy/status', async (req, res) => {
   try {

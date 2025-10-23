@@ -44,6 +44,7 @@ router.post('/quota/log', async (req, res) => {
       provider,
       model,
       status,
+      request_body,
       response_body_compressed
     } = req.body;
 
@@ -51,6 +52,26 @@ router.post('/quota/log', async (req, res) => {
     let completion_tokens = 0;
     let total_tokens = 0;
     let cost = 0;
+    let requestText = null;
+    let responseText = null;
+    let requestHash = null;
+    let responseHash = null;
+
+    // Process request body
+    if (request_body) {
+      try {
+        // Decode from base64
+        const requestBuffer = Buffer.from(request_body, 'base64');
+        requestText = requestBuffer.toString('utf8');
+        console.log('Request body:', requestText.substring(0, 200));
+
+        // Calculate SHA256 hash of request
+        requestHash = crypto.createHash('sha256').update(requestText).digest('hex');
+        console.log('Request hash:', requestHash);
+      } catch (requestError) {
+        console.error('Failed to process request body:', requestError.message);
+      }
+    }
 
     // Decompress and extract usage data if response body provided
     if (response_body_compressed) {
@@ -61,8 +82,12 @@ router.post('/quota/log', async (req, res) => {
 
         // Decompress with gzip
         const decompressed = zlib.gunzipSync(compressedBuffer);
-        const responseText = decompressed.toString('utf8');
+        responseText = decompressed.toString('utf8');
         console.log('Decompressed response:', responseText.substring(0, 200));
+
+        // Calculate SHA256 hash of response
+        responseHash = crypto.createHash('sha256').update(responseText).digest('hex');
+        console.log('Response hash:', responseHash);
 
         // Parse JSON and extract usage
         const responseData = JSON.parse(responseText);
@@ -89,11 +114,17 @@ router.post('/quota/log', async (req, res) => {
 
     // Insert usage log
     const logId = crypto.randomUUID();
+
+    // Only store full request/response text if explicitly enabled (default: false)
+    const storeFullData = process.env.STORE_FULL_REQUEST_RESPONSE === 'true';
+    const requestDataToStore = storeFullData ? requestText : null;
+    const responseDataToStore = storeFullData ? responseText : null;
+
     await pool.query(
       `INSERT INTO usage_logs
-        (id, consumer_id, provider, model, prompt_tokens, completion_tokens, total_tokens, cost, status, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
-      [logId, consumer_id, provider, model, prompt_tokens, completion_tokens, total_tokens, cost, status]
+        (id, consumer_id, provider, model, prompt_tokens, completion_tokens, total_tokens, cost, status, request_data, response_data, request_hash, response_hash, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())`,
+      [logId, consumer_id, provider, model, prompt_tokens, completion_tokens, total_tokens, cost, status, requestDataToStore, responseDataToStore, requestHash, responseHash]
     );
 
     // Update consumer quota
@@ -107,7 +138,9 @@ router.post('/quota/log', async (req, res) => {
     res.json({
       message: 'Usage logged successfully',
       tokens: { prompt_tokens, completion_tokens, total_tokens },
-      cost
+      cost,
+      request_hash: requestHash,
+      response_hash: responseHash
     });
   } catch (error) {
     console.error('Error logging usage:', error);

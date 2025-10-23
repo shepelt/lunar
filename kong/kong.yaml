@@ -52,19 +52,3 @@ services:
                 name: gpt-5
                 options:
                   temperature: 1.0
-          - name: cors
-            config:
-              origins:
-                - http://localhost:3000
-              methods:
-                - GET
-                - POST
-                - OPTIONS
-              headers:
-                - Content-Type
-                - Authorization
-                - apikey
-              exposed_headers:
-                - X-Kong-Request-Id
-              credentials: true
-              max_age: 3600

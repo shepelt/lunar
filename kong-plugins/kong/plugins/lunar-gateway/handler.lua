@@ -36,6 +36,16 @@ local function call_backend_sync(method, url, body)
   return data, nil
 end
 
+-- Rewrite phase: Capture request body before sending to upstream
+function LunarGatewayHandler:rewrite(conf)
+  -- Read and store request body
+  local request_body = kong.request.get_raw_body()
+
+  if request_body then
+    kong.ctx.plugin.request_body = request_body
+  end
+end
+
 -- Access phase: Check quota before allowing request
 function LunarGatewayHandler:access(conf)
   -- Get consumer information
@@ -95,6 +105,9 @@ function LunarGatewayHandler:log(conf)
     return -- No consumer, nothing to log
   end
 
+  -- Get captured request body from rewrite phase
+  local request_body = kong.ctx.plugin.request_body
+
   -- Get captured response body from body_filter phase
   local response_body_parts = kong.ctx.plugin.response_body
   local response_body_compressed = nil
@@ -120,13 +133,18 @@ function LunarGatewayHandler:log(conf)
 
     local log_url = conf.backend_url .. "/api/quota/log"
 
-    -- Build log data - send compressed response body for backend to decompress
+    -- Build log data - send request and response bodies for backend to process
     local log_data = {
       consumer_id = consumer_id,
       provider = provider,
       model = model,
       status = status
     }
+
+    -- Add request body if available (base64 encoded for JSON transport)
+    if request_body then
+      log_data.request_body = ngx.encode_base64(request_body)
+    end
 
     -- Add compressed response body if available (base64 encoded for JSON transport)
     if response_body_compressed then
