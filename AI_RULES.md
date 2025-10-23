@@ -34,6 +34,7 @@ Client → Kong (auth) → Backend API (billing/audit) → LLM Provider
   dashboard.js      # Dashboard logic
 /kong               # Kong configuration (if needed)
 docker-compose.yml  # Kong + Postgres orchestration
+BACKLOG.md          # Project backlog (tasks and features)
 ```
 
 ## Code Conventions

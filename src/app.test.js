@@ -183,7 +183,8 @@ describe('Lunar Gateway API (Kong Consumer-based)', () => {
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('id');
-      expect(response.body.cost).toBe((100 * 0.00001) + (50 * 0.00003));
+      // GPT-5 pricing: $1.25/1M input, $10/1M output
+      expect(response.body.cost).toBe((100 * 0.00000125) + (50 * 0.00001));
       expect(response.body.total_tokens).toBe(150);
       expect(response.body.consumer_id).toBe('test-consumer-123');
     });
@@ -204,7 +205,8 @@ describe('Lunar Gateway API (Kong Consumer-based)', () => {
         .get('/api/quota-check')
         .set(mockConsumerHeaders);
 
-      const expectedCost = (100 * 0.00001) + (50 * 0.00003);
+      // GPT-5 pricing: $1.25/1M input, $10/1M output
+      const expectedCost = (100 * 0.00000125) + (50 * 0.00001);
       expect(response.body.remaining).toBe(100 - expectedCost);
     });
 
