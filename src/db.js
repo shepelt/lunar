@@ -43,6 +43,7 @@ export async function initDatabase() {
         response_data TEXT,
         request_hash TEXT,
         response_hash TEXT,
+        blockchain_tx_hash TEXT,
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
@@ -68,6 +69,11 @@ export async function initDatabase() {
         END;
         BEGIN
           ALTER TABLE usage_logs ADD COLUMN response_hash TEXT;
+        EXCEPTION
+          WHEN duplicate_column THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE usage_logs ADD COLUMN blockchain_tx_hash TEXT;
         EXCEPTION
           WHEN duplicate_column THEN NULL;
         END;

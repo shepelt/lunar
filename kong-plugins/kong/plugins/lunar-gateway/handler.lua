@@ -36,18 +36,18 @@ local function call_backend_sync(method, url, body)
   return data, nil
 end
 
--- Rewrite phase: Capture request body before sending to upstream
-function LunarGatewayHandler:rewrite(conf)
-  -- Read and store request body
-  local request_body = kong.request.get_raw_body()
+-- Access phase: Check quota before allowing request
+function LunarGatewayHandler:access(conf)
+  -- Capture request body (must be done in access phase before proxying)
+  local request_body, err = kong.request.get_raw_body()
 
   if request_body then
     kong.ctx.plugin.request_body = request_body
+    kong.log.debug("Captured request body: ", string.len(request_body), " bytes")
+  else
+    kong.log.warn("Failed to capture request body: ", err or "empty")
   end
-end
 
--- Access phase: Check quota before allowing request
-function LunarGatewayHandler:access(conf)
   -- Get consumer information
   local consumer = kong.client.get_consumer()
 

@@ -2,6 +2,7 @@ import express from 'express';
 import crypto from 'crypto';
 import zlib from 'zlib';
 import { pool } from './db.js';
+import { logToBlockchain } from './blockchain.js';
 
 const router = express.Router();
 
@@ -134,6 +135,22 @@ router.post('/quota/log', async (req, res) => {
        WHERE consumer_id = $2`,
       [cost, consumer_id]
     );
+
+    // Log to blockchain asynchronously (don't wait for it)
+    if (requestHash && responseHash) {
+      logToBlockchain({
+        logId,
+        consumerId: consumer_id,
+        provider: provider || 'unknown',
+        model: model || 'unknown',
+        promptTokens: prompt_tokens,
+        completionTokens: completion_tokens,
+        requestHash: '0x' + requestHash,
+        responseHash: '0x' + responseHash
+      }).catch(err => {
+        console.error('Blockchain logging failed:', err.message);
+      });
+    }
 
     res.json({
       message: 'Usage logged successfully',

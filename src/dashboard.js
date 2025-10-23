@@ -237,7 +237,12 @@ router.get('/audit', async (req, res) => {
     const { limit = 100 } = req.query;
 
     let query = `
-      SELECT * FROM usage_logs
+      SELECT
+        id, consumer_id, provider, model,
+        prompt_tokens, completion_tokens, total_tokens,
+        cost, status, blockchain_tx_hash,
+        EXTRACT(EPOCH FROM created_at) * 1000 as created_at_ms
+      FROM usage_logs
       WHERE 1=1
     `;
     const params = [];
@@ -266,7 +271,9 @@ router.get('/audit', async (req, res) => {
       total_tokens: row.total_tokens,
       cost: parseFloat(row.cost),
       status: row.status,
-      created_at: new Date(row.created_at).getTime()
+      blockchain_tx_hash: row.blockchain_tx_hash,
+      // Use Unix timestamp directly from PostgreSQL to avoid timezone issues
+      created_at: parseFloat(row.created_at_ms)
     }));
 
     res.json(logs);

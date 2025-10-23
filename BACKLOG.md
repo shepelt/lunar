@@ -15,13 +15,12 @@
 - TASK-8: Consumer management API and dashboard
 - TASK-9: Docker Compose orchestration
 - TASK-10: Automated tests with Jest
+- TASK-11: Cryptographic hashing (SHA256) of request/response for audit trail
+- TASK-12: Blockchain integration for immutable audit logs (HPP Sepolia)
 
 ## In Progress
 
 ## Future Ideas
-
-- TASK-11: Cryptographic hashing of LLM responses for audit trail
-- TASK-12: Blockchain integration for immutable audit logs
 - TASK-13: Batching for quota logging (reduce DB calls)
 - TASK-14: In-memory caching for quota checks
 - TASK-15: Multi-provider LLM support

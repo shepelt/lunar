@@ -106,7 +106,7 @@ function renderAIProxyStatus(status) {
   }
 
   const providersHTML = status.providers.map(provider => {
-    const statusColor = provider.enabled && provider.configured ? 'text-green-600' : 'text-red-600';
+    const statusColor = provider.enabled && provider.configured ? 'text-[#4949B4]' : 'text-red-600';
     const statusIcon = provider.enabled && provider.configured ? '✅' : '❌';
     const statusText = provider.enabled && provider.configured ? 'Active' : 'Inactive';
 
@@ -162,7 +162,7 @@ function renderConsumersTable(consumers) {
   tbody.innerHTML = consumers.map(consumer => {
     const remaining = consumer.quota - consumer.used;
     const percentUsed = ((consumer.used / consumer.quota) * 100).toFixed(1);
-    let badgeColor = 'bg-green-100 text-green-800';
+    let badgeColor = 'bg-blue-100 text-blue-800';
     if (percentUsed > 80) badgeColor = 'bg-red-100 text-red-800';
     else if (percentUsed > 50) badgeColor = 'bg-yellow-100 text-yellow-800';
 
@@ -172,7 +172,7 @@ function renderConsumersTable(consumers) {
         <td class="px-4 py-3"><span class="font-mono text-xs text-gray-600">${consumer.id.substring(0, 16)}...</span></td>
         <td class="px-4 py-3 text-gray-700">${formatCurrency(consumer.quota)}</td>
         <td class="px-4 py-3"><span class="inline-block px-2 py-1 rounded text-xs font-medium ${badgeColor}">${formatCurrency(consumer.used)} (${percentUsed}%)</span></td>
-        <td class="px-4 py-3 font-medium text-green-600">${formatCurrency(remaining)}</td>
+        <td class="px-4 py-3 font-medium text-[#4949B4]">${formatCurrency(remaining)}</td>
         <td class="px-4 py-3 text-gray-700">${consumer.requests || 0}</td>
         <td class="px-4 py-3">
           <button
@@ -198,13 +198,42 @@ function renderRequestsTable(requests) {
   const tbody = document.querySelector('#requests-table tbody');
 
   if (requests.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500 italic">No requests found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500 italic">No requests found</td></tr>';
     return;
   }
 
   tbody.innerHTML = requests.map(request => {
-    const statusColor = request.status === 'success' ? 'text-green-600 font-medium' : 'text-red-600 font-medium';
+    const statusColor = request.status === 'success' ? 'text-[#4949B4] font-medium' : 'text-red-600 font-medium';
     const consumerId = request.consumer_id ? request.consumer_id.substring(0, 12) + '...' : 'N/A';
+
+    // Blockchain badge
+    let blockchainCell;
+    if (request.blockchain_tx_hash) {
+      const explorerUrl = `https://sepolia-explorer.hpp.io/tx/${request.blockchain_tx_hash}`;
+      blockchainCell = `
+        <div class="relative inline-block">
+          <a href="${explorerUrl}"
+             target="_blank"
+             class="blockchain-badge inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors"
+             data-tx-hash="${request.blockchain_tx_hash}"
+             onmouseenter="showBlockchainTooltip(event)"
+             onmouseleave="hideBlockchainTooltip(event)">
+            <span class="mr-1">✓</span>
+            <span>On-chain</span>
+          </a>
+          <div class="blockchain-tooltip hidden z-50 w-64 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg">
+            <div class="text-gray-400">Loading...</div>
+          </div>
+        </div>
+      `;
+    } else {
+      blockchainCell = `
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+          <span class="mr-1">⏳</span>
+          <span>Confirming...</span>
+        </span>
+      `;
+    }
 
     return `
       <tr class="hover:bg-gray-50">
@@ -213,8 +242,9 @@ function renderRequestsTable(requests) {
         <td class="px-4 py-3 text-gray-700">${request.provider || 'N/A'}</td>
         <td class="px-4 py-3 text-gray-700">${request.model || 'N/A'}</td>
         <td class="px-4 py-3 text-gray-700">${formatNumber(request.total_tokens)}</td>
-        <td class="px-4 py-3 font-medium text-green-600">${formatCurrency(request.cost)}</td>
+        <td class="px-4 py-3 font-medium text-[#4949B4]">${formatCurrency(request.cost)}</td>
         <td class="px-4 py-3"><span class="${statusColor}">${request.status || 'unknown'}</span></td>
+        <td class="px-4 py-3">${blockchainCell}</td>
       </tr>
     `;
   }).join('');
@@ -328,7 +358,7 @@ function showMessage(message, isError = false) {
   messageDiv.appendChild(textNode);
   messageDiv.className = isError
     ? 'mt-3 p-3 rounded-lg bg-red-100 text-red-800 border border-red-300'
-    : 'mt-3 p-3 rounded-lg bg-green-100 text-green-800 border border-green-300';
+    : 'mt-3 p-3 rounded-lg bg-blue-100 text-blue-800 border border-blue-300';
   messageDiv.classList.remove('hidden');
 }
 
@@ -392,7 +422,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const messageDiv = document.getElementById('create-consumer-message');
       const copyBtn = document.createElement('button');
       copyBtn.textContent = '📋 Copy API Key';
-      copyBtn.className = 'mt-2 px-3 py-1 bg-white border border-green-600 text-green-700 rounded hover:bg-green-50 transition-colors font-medium';
+      copyBtn.className = 'mt-2 px-3 py-1 bg-white border border-[#4949B4] text-[#4949B4] rounded hover:bg-gray-50 transition-colors font-medium';
       copyBtn.onclick = () => {
         // Try modern clipboard API first, fallback to older method
         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -507,6 +537,151 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+// Blockchain tooltip cache (stores blockchain data, not HTML)
+const blockchainCache = new Map();
+let tooltipUpdateInterval = null;
+let tooltipStartTime = null;
+
+// Format time ago dynamically based on real elapsed time
+function formatTimeAgo(secondsAgo) {
+  if (secondsAgo < 60) return `${secondsAgo}s ago`;
+  else if (secondsAgo < 3600) return `${Math.floor(secondsAgo / 60)}m ago`;
+  else if (secondsAgo < 86400) return `${Math.floor(secondsAgo / 3600)}h ago`;
+  else return `${Math.floor(secondsAgo / 86400)}d ago`;
+}
+
+// Generate tooltip HTML with current time
+function generateTooltipHTML(txHash, data, currentBlock, elapsedSeconds) {
+  const confirmations = currentBlock - data.blockNumber + 1;
+  const timeAgo = formatTimeAgo(elapsedSeconds);
+  const gasUsed = Number(data.gasUsed).toLocaleString();
+
+  return `
+    <div class="space-y-1">
+      <div class="text-white font-semibold mb-2">Transaction Details</div>
+      <div class="text-gray-400">Block: <span class="text-white">#${data.blockNumber}</span></div>
+      <div class="text-gray-400">Confirmations: <span class="text-[#8383D9]" data-dynamic-confirmations>${confirmations}</span></div>
+      <div class="text-gray-400">Gas Used: <span class="text-white">${gasUsed}</span></div>
+      <div class="text-gray-400">Time: <span class="text-white" data-dynamic-time>${timeAgo}</span></div>
+      <div class="text-gray-400">Status: <span class="text-[#8383D9]">✓ Confirmed</span></div>
+      <div class="mt-2 pt-2 border-t border-gray-700">
+        <div class="text-gray-400 text-xs">Tx: ${txHash.substring(0, 10)}...${txHash.substring(txHash.length - 8)}</div>
+      </div>
+    </div>
+  `;
+}
+
+// Show blockchain tooltip with on-chain data
+async function showBlockchainTooltip(event) {
+  const badge = event.currentTarget;
+  const tooltip = badge.nextElementSibling;
+  const txHash = badge.dataset.txHash;
+
+  if (!txHash) return;
+
+  // Position tooltip relative to viewport (fixed positioning)
+  const rect = badge.getBoundingClientRect();
+  tooltip.style.position = 'fixed';
+  tooltip.style.top = `${rect.top}px`;
+  tooltip.style.left = `${rect.left - 270}px`; // 270 = 264px width + 6px margin
+
+  // Show tooltip
+  tooltip.classList.remove('hidden');
+
+  const web3 = new Web3('https://sepolia.hpp.io');
+
+  // Track start time for elapsed calculation
+  tooltipStartTime = Date.now();
+
+  // Check cache first
+  if (blockchainCache.has(txHash)) {
+    const data = blockchainCache.get(txHash);
+    const currentBlock = await web3.eth.getBlockNumber();
+    const initialElapsed = Math.floor((Date.now() - data.timestamp) / 1000);
+    tooltip.innerHTML = generateTooltipHTML(txHash, data, Number(currentBlock), initialElapsed);
+  } else {
+    // Query blockchain for first time
+    try {
+      // Get transaction receipt
+      const receipt = await web3.eth.getTransactionReceipt(txHash);
+
+      if (!receipt) {
+        tooltip.innerHTML = '<div class="text-red-400">Transaction not found</div>';
+        return;
+      }
+
+      // Get current block and block timestamp
+      const currentBlock = await web3.eth.getBlockNumber();
+      const block = await web3.eth.getBlock(receipt.blockNumber);
+      const blockTimestamp = Number(block.timestamp) * 1000; // Convert to milliseconds
+
+      // Cache blockchain data with timestamp
+      const data = {
+        blockNumber: Number(receipt.blockNumber),
+        gasUsed: Number(receipt.gasUsed),
+        timestamp: blockTimestamp
+      };
+      blockchainCache.set(txHash, data);
+
+      // Calculate initial elapsed time
+      const initialElapsed = Math.floor((Date.now() - blockTimestamp) / 1000);
+
+      // Generate and display HTML
+      tooltip.innerHTML = generateTooltipHTML(txHash, data, Number(currentBlock), initialElapsed);
+
+    } catch (error) {
+      console.error('Failed to fetch blockchain data:', error);
+      tooltip.innerHTML = `<div class="text-red-400">Error loading data</div>`;
+      return;
+    }
+  }
+
+  // Update time every second while tooltip is visible
+  clearInterval(tooltipUpdateInterval);
+  let lastBlockCheck = Date.now();
+
+  tooltipUpdateInterval = setInterval(async () => {
+    if (tooltip.classList.contains('hidden')) {
+      clearInterval(tooltipUpdateInterval);
+      return;
+    }
+
+    const data = blockchainCache.get(txHash);
+    if (data) {
+      // Update time every second (based on real elapsed time)
+      const elapsedSeconds = Math.floor((Date.now() - data.timestamp) / 1000);
+      const timeElement = tooltip.querySelector('[data-dynamic-time]');
+      if (timeElement) {
+        timeElement.textContent = formatTimeAgo(elapsedSeconds);
+      }
+
+      // Update confirmations every 15 seconds (to check for new blocks)
+      if (Date.now() - lastBlockCheck > 15000) {
+        lastBlockCheck = Date.now();
+        const currentBlock = await web3.eth.getBlockNumber();
+        const confirmations = Number(currentBlock) - data.blockNumber + 1;
+        const confirmationsElement = tooltip.querySelector('[data-dynamic-confirmations]');
+        if (confirmationsElement) {
+          confirmationsElement.textContent = confirmations;
+        }
+      }
+    }
+  }, 1000);
+}
+
+// Hide blockchain tooltip
+function hideBlockchainTooltip(event) {
+  const badge = event.currentTarget;
+  const tooltip = badge.nextElementSibling;
+  tooltip.classList.add('hidden');
+
+  // Clear update interval
+  if (tooltipUpdateInterval) {
+    clearInterval(tooltipUpdateInterval);
+    tooltipUpdateInterval = null;
+  }
+}
 
 // Clean up on page unload
 window.addEventListener('beforeunload', () => {

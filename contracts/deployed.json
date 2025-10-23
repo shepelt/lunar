@@ -1,0 +1,211 @@
+{
+  "address": "0xEbB99aA360E3759089c186A3286727B5E3f7A0F3",
+  "abi": [
+    {
+      "inputs": [],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "string",
+          "name": "logId",
+          "type": "string"
+        },
+        {
+          "indexed": true,
+          "internalType": "string",
+          "name": "consumerId",
+          "type": "string"
+        },
+        {
+          "indexed": true,
+          "internalType": "string",
+          "name": "provider",
+          "type": "string"
+        },
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "model",
+          "type": "string"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "timestamp",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "promptTokens",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "completionTokens",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "bytes32",
+          "name": "requestHash",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "bytes32",
+          "name": "responseHash",
+          "type": "bytes32"
+        }
+      ],
+      "name": "RequestLogged",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "string",
+          "name": "logId",
+          "type": "string"
+        },
+        {
+          "internalType": "string",
+          "name": "consumerId",
+          "type": "string"
+        },
+        {
+          "internalType": "string",
+          "name": "provider",
+          "type": "string"
+        },
+        {
+          "internalType": "string",
+          "name": "model",
+          "type": "string"
+        },
+        {
+          "internalType": "uint256",
+          "name": "promptTokens",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "completionTokens",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "requestHash",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "responseHash",
+          "type": "bytes32"
+        }
+      ],
+      "name": "logRequest",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "string[]",
+          "name": "logIds",
+          "type": "string[]"
+        },
+        {
+          "internalType": "string[]",
+          "name": "consumerIds",
+          "type": "string[]"
+        },
+        {
+          "internalType": "string[]",
+          "name": "providers",
+          "type": "string[]"
+        },
+        {
+          "internalType": "string[]",
+          "name": "models",
+          "type": "string[]"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "promptTokens",
+          "type": "uint256[]"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "completionTokens",
+          "type": "uint256[]"
+        },
+        {
+          "internalType": "bytes32[]",
+          "name": "requestHashes",
+          "type": "bytes32[]"
+        },
+        {
+          "internalType": "bytes32[]",
+          "name": "responseHashes",
+          "type": "bytes32[]"
+        }
+      ],
+      "name": "logRequestBatch",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "owner",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "totalLogs",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "version",
+      "outputs": [
+        {
+          "internalType": "string",
+          "name": "",
+          "type": "string"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    }
+  ],
+  "network": "HPP Sepolia",
+  "chainId": 181228,
+  "rpcUrl": "https://sepolia.hpp.io",
+  "deployedAt": "2025-10-23T13:03:44.189Z",
+  "deployer": "0x029AC8A69b5b79253b315Ebf7cF17d2Fdb735a2E"
+}
