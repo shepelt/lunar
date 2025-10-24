@@ -52,3 +52,4 @@ services:
                 name: gpt-5
                 options:
                   temperature: 1.0
+              max_request_body_size: 1048576  # 1MB limit for large requests (Dyad sends full codebase)

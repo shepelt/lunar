@@ -64,11 +64,9 @@ router.post('/quota/log', async (req, res) => {
         // Decode from base64
         const requestBuffer = Buffer.from(request_body, 'base64');
         requestText = requestBuffer.toString('utf8');
-        console.log('Request body:', requestText.substring(0, 200));
 
         // Calculate SHA256 hash of request
         requestHash = crypto.createHash('sha256').update(requestText).digest('hex');
-        console.log('Request hash:', requestHash);
       } catch (requestError) {
         console.error('Failed to process request body:', requestError.message);
       }
@@ -79,20 +77,57 @@ router.post('/quota/log', async (req, res) => {
       try {
         // Decode from base64
         const compressedBuffer = Buffer.from(response_body_compressed, 'base64');
-        console.log('Received compressed response:', compressedBuffer.length, 'bytes');
 
-        // Decompress with gzip
-        const decompressed = zlib.gunzipSync(compressedBuffer);
-        responseText = decompressed.toString('utf8');
-        console.log('Decompressed response:', responseText.substring(0, 200));
+        // Try to decompress with gzip, but handle both gzipped and non-gzipped data
+        let textBuffer = compressedBuffer;
+        try {
+          // Check if it's actually gzipped by looking at the magic number (1f 8b)
+          if (compressedBuffer.length >= 2 && compressedBuffer[0] === 0x1f && compressedBuffer[1] === 0x8b) {
+            textBuffer = zlib.gunzipSync(compressedBuffer);
+          }
+        } catch (decompressError) {
+          console.warn('Gzip decompression failed:', decompressError.message);
+          textBuffer = compressedBuffer;
+        }
+
+        responseText = textBuffer.toString('utf8');
 
         // Calculate SHA256 hash of response
         responseHash = crypto.createHash('sha256').update(responseText).digest('hex');
-        console.log('Response hash:', responseHash);
 
-        // Parse JSON and extract usage
-        const responseData = JSON.parse(responseText);
-        if (responseData.usage) {
+        // Parse response - handle both streaming (SSE) and non-streaming formats
+        let responseData = null;
+
+        // Check if response is in SSE format (starts with "data: ")
+        if (responseText.trim().startsWith('data: ')) {
+          // Parse SSE format - extract the last data chunk that contains usage info
+          const lines = responseText.split('\n');
+          for (let i = lines.length - 1; i >= 0; i--) {
+            const line = lines[i].trim();
+            if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+              try {
+                const jsonStr = line.substring(6); // Remove "data: " prefix
+                const chunk = JSON.parse(jsonStr);
+                if (chunk.usage) {
+                  responseData = chunk;
+                  break;
+                }
+              } catch (e) {
+                // Skip invalid JSON lines
+              }
+            }
+          }
+        } else {
+          // Regular JSON response
+          try {
+            responseData = JSON.parse(responseText);
+          } catch (e) {
+            console.warn('Failed to parse as JSON:', e.message);
+          }
+        }
+
+        // Extract usage data if found
+        if (responseData && responseData.usage) {
           prompt_tokens = responseData.usage.prompt_tokens || 0;
           completion_tokens = responseData.usage.completion_tokens || 0;
           total_tokens = responseData.usage.total_tokens || 0;
@@ -100,17 +135,13 @@ router.post('/quota/log', async (req, res) => {
           // Calculate cost based on GPT-5 pricing
           // Input: $1.25 per 1M tokens, Output: $10.00 per 1M tokens
           cost = (prompt_tokens * 0.00000125) + (completion_tokens * 0.00001);
-
-          console.log(`Extracted usage - prompt: ${prompt_tokens}, completion: ${completion_tokens}, total: ${total_tokens}, cost: $${cost.toFixed(6)}`);
         } else {
           console.warn('No usage data in response');
         }
-      } catch (decompressError) {
-        console.error('Failed to decompress/parse response:', decompressError.message);
-        // Continue with zero tokens if decompression fails
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError.message);
+        // Continue with zero tokens if parsing fails
       }
-    } else {
-      console.warn('No response body provided');
     }
 
     // Insert usage log

@@ -39,13 +39,72 @@ end
 -- Access phase: Check quota before allowing request
 function LunarGatewayHandler:access(conf)
   -- Capture request body (must be done in access phase before proxying)
+  -- Try to get body from memory first
   local request_body, err = kong.request.get_raw_body()
 
   if request_body then
     kong.ctx.plugin.request_body = request_body
-    kong.log.debug("Captured request body: ", string.len(request_body), " bytes")
+    kong.log.debug("Captured request body from memory: ", string.len(request_body), " bytes")
   else
-    kong.log.warn("Failed to capture request body: ", err or "empty")
+    -- If body is too large and buffered to disk, read from temporary file
+    kong.log.debug("Body not in memory, checking for buffered file: ", err or "empty")
+
+    -- Force nginx to read the body into the buffer/file
+    ngx.req.read_body()
+
+    -- Check if body was buffered to a file
+    local body_file = ngx.req.get_body_file()
+
+    if body_file then
+      kong.log.info("Reading request body from temporary file: ", body_file)
+
+      -- Read the file
+      local file = io.open(body_file, "r")
+      if file then
+        request_body = file:read("*all")
+        file:close()
+
+        if request_body then
+          kong.ctx.plugin.request_body = request_body
+          kong.log.info("Successfully captured request body from file: ", string.len(request_body), " bytes")
+        else
+          kong.log.warn("Failed to read request body from file")
+        end
+      else
+        kong.log.warn("Failed to open request body file: ", body_file)
+      end
+    else
+      kong.log.debug("No request body file, body might be empty or already consumed")
+    end
+  end
+
+  -- Modify request body to include stream_options for usage tracking (OpenAI only)
+  if request_body then
+    local body_json, decode_err = cjson.decode(request_body)
+
+    if body_json and body_json.stream then
+      -- Detect provider from model name or default to OpenAI
+      local model = body_json.model or ""
+      local is_openai = model:match("^gpt") or model:match("^o1") or model == ""
+
+      -- Only add stream_options for OpenAI models
+      if is_openai and not body_json.stream_options then
+        body_json.stream_options = {
+          include_usage = true
+        }
+
+        -- Re-encode and update the request body
+        local new_body = cjson.encode(body_json)
+        kong.service.request.set_raw_body(new_body)
+
+        -- Update the captured body in context
+        kong.ctx.plugin.request_body = new_body
+
+        kong.log.info("Added stream_options for OpenAI model: ", model)
+      else
+        kong.log.debug("Skipping stream_options for non-OpenAI model: ", model)
+      end
+    end
   end
 
   -- Get consumer information

@@ -372,7 +372,105 @@ router.delete('/admin/consumers/:consumer_id', async (req, res) => {
   }
 });
 
-// Proxy LLM requests (for dashboard testing)
+// OpenAI-compatible LLM proxy endpoint (accepts Bearer token, supports streaming)
+router.post('/llm/v1/chat/completions', async (req, res) => {
+  try {
+    const kongUrl = process.env.KONG_GATEWAY_URL || 'http://localhost:8000';
+
+    // Extract API key from Authorization header (Bearer token) or apikey header
+    let apiKey = null;
+    const authHeader = req.headers.authorization;
+    const apikeyHeader = req.headers.apikey;
+
+    if (authHeader) {
+      // Extract token from "Bearer <token>" format
+      const match = authHeader.match(/^Bearer\s+(.+)$/);
+      if (match) {
+        apiKey = match[1];
+      }
+    } else if (apikeyHeader) {
+      apiKey = apikeyHeader;
+    }
+
+    if (!apiKey) {
+      return res.status(401).json({
+        error: {
+          message: 'No API key found in request',
+          type: 'invalid_request_error',
+          code: 'missing_api_key'
+        }
+      });
+    }
+
+    // Transform model name - map custom model names to Kong-configured model
+    // Kong's ai-proxy expects real OpenAI model names (configured as gpt-5 in kong.yaml)
+    const requestBody = { ...req.body };
+    const originalModel = requestBody.model;
+
+    // Map any custom model name to the Kong-configured model
+    // This allows Dyad and other clients to use custom model names like "lunar-openai"
+    if (requestBody.model && requestBody.model !== 'gpt-5') {
+      requestBody.model = 'gpt-5'; // Use the model configured in kong.yaml
+    }
+
+    // Transform max_tokens to max_completion_tokens for GPT-5 compatibility
+    if (requestBody.max_tokens !== undefined) {
+      requestBody.max_completion_tokens = requestBody.max_tokens;
+      delete requestBody.max_tokens;
+    }
+
+    // Forward request to Kong with apikey header
+    const response = await fetch(`${kongUrl}/llm/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': apiKey
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    // Handle streaming responses
+    if (req.body.stream) {
+      // Set appropriate headers for Server-Sent Events
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.status(response.status);
+
+      // Convert Web Stream to Node.js stream and pipe to client
+      const { Readable } = await import('stream');
+      const nodeStream = Readable.fromWeb(response.body);
+
+      nodeStream.pipe(res);
+
+      // Handle errors
+      nodeStream.on('error', (error) => {
+        console.error('Stream error:', error);
+        res.end();
+      });
+
+      return;
+    }
+
+    // Non-streaming response (original behavior)
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(response.status).json(data);
+    }
+
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({
+      error: {
+        message: error.message,
+        type: 'server_error'
+      }
+    });
+  }
+});
+
+// Proxy LLM requests (for dashboard testing - legacy endpoint)
 router.post('/llm-proxy', async (req, res) => {
   try {
     const { api_key, prompt } = req.body;
@@ -417,7 +515,7 @@ router.post('/llm-proxy', async (req, res) => {
 router.get('/ai-proxy/status', async (req, res) => {
   try {
     const kongAdminUrl = process.env.KONG_ADMIN_URL || 'http://localhost:8001';
-    const kongUrl = process.env.KONG_GATEWAY_URL || 'http://localhost:8000';
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
 
     // Get all plugins
     const response = await fetch(`${kongAdminUrl}/plugins`);
@@ -430,7 +528,7 @@ router.get('/ai-proxy/status', async (req, res) => {
       return res.json({
         configured: false,
         providers: [],
-        llm_endpoint: `${kongUrl}/llm/v1/chat/completions`
+        llm_endpoint: `${backendUrl}/api/llm/v1/chat/completions`
       });
     }
 
@@ -459,7 +557,7 @@ router.get('/ai-proxy/status', async (req, res) => {
       configured: true,
       count: providers.length,
       providers,
-      llm_endpoint: `${kongUrl}/llm/v1/chat/completions`
+      llm_endpoint: `${backendUrl}/api/llm/v1/chat/completions`
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

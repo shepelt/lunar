@@ -10,7 +10,8 @@ const __dirname = dirname(__filename);
 
 const app = express();
 
-app.use(express.json());
+// Increase body size limit for large LLM requests/responses (Dyad sends full codebase)
+app.use(express.json({ limit: '10mb' }));
 
 // Serve static files from public directory
 app.use(express.static(join(__dirname, '..', 'public')));
