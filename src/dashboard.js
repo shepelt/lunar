@@ -417,6 +417,7 @@ router.post('/llm-proxy', async (req, res) => {
 router.get('/ai-proxy/status', async (req, res) => {
   try {
     const kongAdminUrl = process.env.KONG_ADMIN_URL || 'http://localhost:8001';
+    const kongUrl = process.env.KONG_GATEWAY_URL || 'http://localhost:8000';
 
     // Get all plugins
     const response = await fetch(`${kongAdminUrl}/plugins`);
@@ -428,7 +429,8 @@ router.get('/ai-proxy/status', async (req, res) => {
     if (aiProxyPlugins.length === 0) {
       return res.json({
         configured: false,
-        providers: []
+        providers: [],
+        llm_endpoint: `${kongUrl}/llm/v1/chat/completions`
       });
     }
 
@@ -456,7 +458,8 @@ router.get('/ai-proxy/status', async (req, res) => {
     res.json({
       configured: true,
       count: providers.length,
-      providers
+      providers,
+      llm_endpoint: `${kongUrl}/llm/v1/chat/completions`
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

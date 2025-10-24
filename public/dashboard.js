@@ -94,6 +94,14 @@ async function fetchAIProxyStatus() {
 // Render AI Proxy status
 function renderAIProxyStatus(status) {
   const container = document.getElementById('ai-proxy-status');
+  const endpointUrlElement = document.getElementById('llm-endpoint-url');
+
+  // Update LLM endpoint URL
+  if (status.llm_endpoint) {
+    endpointUrlElement.textContent = status.llm_endpoint;
+  } else {
+    endpointUrlElement.textContent = 'Not available';
+  }
 
   if (!status.configured) {
     container.innerHTML = `
