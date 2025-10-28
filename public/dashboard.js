@@ -79,70 +79,37 @@ async function fetchRequests(limit = 25) {
   }
 }
 
-// Fetch AI Proxy status
-async function fetchAIProxyStatus() {
+// Fetch config (for Ollama model name, etc.)
+async function fetchConfig() {
   try {
-    const response = await fetch('/api/ai-proxy/status');
-    if (!response.ok) throw new Error('Failed to fetch AI Proxy status');
+    const response = await fetch('/api/config');
+    if (!response.ok) throw new Error('Failed to fetch config');
     return await response.json();
   } catch (error) {
-    console.error('Error fetching AI Proxy status:', error);
-    return { configured: false, providers: [] };
+    console.error('Error fetching config:', error);
+    return { ollama_model: 'gpt-oss:120b' };
+  }
+}
+
+// Fetch provider statistics
+async function fetchProviderStats() {
+  try {
+    const response = await fetch('/api/stats/providers');
+    if (!response.ok) throw new Error('Failed to fetch provider stats');
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching provider stats:', error);
+    return [];
   }
 }
 
 // Render AI Proxy status
-function renderAIProxyStatus(status) {
-  const container = document.getElementById('ai-proxy-status');
-  const endpointUrlElement = document.getElementById('llm-endpoint-url');
-
-  // Update LLM endpoint URL
-  if (status.llm_endpoint) {
-    endpointUrlElement.textContent = status.llm_endpoint;
-  } else {
-    endpointUrlElement.textContent = 'Not available';
+// Update config display (Ollama model name, etc.)
+function updateConfigDisplay(config) {
+  const ollamaModelElement = document.getElementById('ollama-model-name');
+  if (ollamaModelElement && config.ollama_model) {
+    ollamaModelElement.textContent = config.ollama_model;
   }
-
-  if (!status.configured) {
-    container.innerHTML = `
-      <div class="text-yellow-600 flex items-center gap-2">
-        <span class="text-2xl">⚠️</span>
-        <span>AI Proxy not configured. Set OPENAI_API_KEY and restart.</span>
-      </div>
-    `;
-    return;
-  }
-
-  const providersHTML = status.providers.map(provider => {
-    const statusColor = provider.enabled && provider.configured ? 'text-[#4949B4]' : 'text-red-600';
-    const statusIcon = provider.enabled && provider.configured ? '✅' : '❌';
-    const statusText = provider.enabled && provider.configured ? 'Active' : 'Inactive';
-
-    return `
-      <div class="flex items-start justify-between p-4 border border-gray-200 rounded-lg">
-        <div>
-          <div class="font-semibold text-lg text-gray-900">${provider.provider.toUpperCase()}</div>
-          <div class="text-sm text-gray-600">Model: ${provider.model}</div>
-          <div class="text-sm text-gray-600">Route: ${provider.route_type}</div>
-          ${provider.max_tokens ? `<div class="text-sm text-gray-600">Max Tokens: ${provider.max_tokens}</div>` : ''}
-          ${provider.temperature ? `<div class="text-sm text-gray-600">Temperature: ${provider.temperature}</div>` : ''}
-        </div>
-        <div class="${statusColor} font-medium flex items-center gap-2">
-          <span>${statusIcon}</span>
-          <span>${statusText}</span>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  container.innerHTML = `
-    <div class="space-y-3">
-      <div class="text-sm text-gray-600 mb-3">
-        ${status.count} provider${status.count !== 1 ? 's' : ''} configured
-      </div>
-      ${providersHTML}
-    </div>
-  `;
 }
 
 // Update statistics
@@ -258,20 +225,117 @@ function renderRequestsTable(requests) {
   }).join('');
 }
 
+// Render combined provider info (endpoints + usage stats)
+function renderProvidersCombined(stats, config) {
+  const container = document.getElementById('providers-combined');
+
+  // Get base URL for endpoints
+  const baseUrl = config.lunar_endpoint_url || 'http://localhost:8000';
+
+  // Provider configurations
+  const providers = {
+    'openai': {
+      icon: '🤖',
+      color: 'bg-green-50 border-green-200',
+      textColor: 'text-green-700',
+      name: 'OpenAI (Cloud)',
+      description: 'GPT-4, GPT-4o, GPT-5',
+      endpoint: `${baseUrl}/llm/v1/chat/completions`,
+      pricing: '$1.25/1M input, $10/1M output'
+    },
+    'ollama': {
+      icon: '🏠',
+      color: 'bg-blue-50 border-blue-200',
+      textColor: 'text-blue-700',
+      name: 'Ollama (Local)',
+      description: config.ollama_model || 'gpt-oss:120b',
+      endpoint: `${baseUrl}/local-llm`,
+      pricing: '$0 (on-premise)'
+    }
+  };
+
+  // Create stats map
+  const statsMap = {};
+  stats.forEach(stat => {
+    statsMap[stat.provider.toLowerCase()] = stat;
+  });
+
+  container.innerHTML = Object.entries(providers).map(([key, provider]) => {
+    const stat = statsMap[key];
+    const hasUsage = stat && stat.requests > 0;
+    const isFree = key === 'ollama';
+
+    return `
+      <div class="border-2 ${provider.color} rounded-lg p-5 hover:shadow-lg transition-shadow">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <span class="text-3xl">${provider.icon}</span>
+            <div>
+              <h3 class="font-bold ${provider.textColor} text-lg">${provider.name}</h3>
+              <span class="text-xs text-gray-500">${provider.description}</span>
+            </div>
+          </div>
+          ${isFree ? '<span class="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">FREE</span>' : ''}
+        </div>
+
+        <!-- Endpoint -->
+        <div class="bg-gray-50 rounded p-3 mb-4">
+          <div class="flex items-center justify-between mb-1">
+            <div class="text-xs text-gray-500">Endpoint:</div>
+            <button
+              onclick="copyToClipboard('${provider.endpoint}', this)"
+              class="text-xs px-2 py-1 bg-white border border-gray-300 rounded hover:bg-gray-100 transition-colors"
+              title="Copy to clipboard"
+            >
+              📋 Copy
+            </button>
+          </div>
+          <div class="font-mono text-xs ${provider.textColor} font-medium break-all">${provider.endpoint}</div>
+          <div class="text-xs text-gray-600 mt-2">${provider.pricing}</div>
+        </div>
+
+        <!-- Usage Stats -->
+        ${hasUsage ? `
+          <div class="border-t border-gray-200 pt-4 space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-xs text-gray-600 uppercase tracking-wide">Requests:</span>
+              <span class="font-bold ${provider.textColor}">${formatNumber(stat.requests)}</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-xs text-gray-600 uppercase tracking-wide">Tokens:</span>
+              <span class="font-semibold ${provider.textColor}">${formatNumber(stat.total_tokens)}</span>
+            </div>
+            <div class="flex justify-between items-center pt-2 border-t border-gray-100">
+              <span class="text-xs text-gray-600 uppercase tracking-wide font-semibold">Total Cost:</span>
+              <span class="font-bold ${isFree ? 'text-green-600' : 'text-brand-dark'} text-lg">${formatCurrency(stat.cost)}</span>
+            </div>
+          </div>
+        ` : `
+          <div class="border-t border-gray-200 pt-4">
+            <div class="text-center text-gray-400 text-sm italic">No usage yet</div>
+          </div>
+        `}
+      </div>
+    `;
+  }).join('');
+}
+
 // Load and refresh dashboard
 async function loadDashboard() {
   const limit = document.getElementById('limit-select').value;
 
-  const [consumers, requests, aiProxyStatus] = await Promise.all([
+  const [consumers, requests, config, providerStats] = await Promise.all([
     fetchConsumers(),
     fetchRequests(limit),
-    fetchAIProxyStatus()
+    fetchConfig(),
+    fetchProviderStats()
   ]);
 
   updateStats(consumers, requests);
   renderConsumersTable(consumers);
   renderRequestsTable(requests);
-  renderAIProxyStatus(aiProxyStatus);
+  renderProvidersCombined(providerStats, config);
 }
 
 // Create consumer
@@ -461,7 +525,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // LLM Test functionality
-async function testLLM(apiKey, prompt) {
+async function testLLM(apiKey, prompt, provider) {
   // Call backend proxy (same origin, no CORS issues)
   const response = await fetch('/api/llm-proxy', {
     method: 'POST',
@@ -470,14 +534,16 @@ async function testLLM(apiKey, prompt) {
     },
     body: JSON.stringify({
       api_key: apiKey,
-      prompt: prompt
+      prompt: prompt,
+      provider: provider,
+      max_tokens: 150
     })
   });
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(`LLM request failed (${response.status}): ${data.error || JSON.stringify(data)}`);
+    throw new Error(`LLM request failed (${response.status}): ${data.error?.message || data.error || JSON.stringify(data)}`);
   }
 
   return data;
@@ -488,12 +554,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const testBtn = document.getElementById('test-llm-btn');
   const apiKeyInput = document.getElementById('test-api-key');
   const promptInput = document.getElementById('test-prompt');
+  const endpointSelect = document.getElementById('test-endpoint-select');
   const responseContainer = document.getElementById('llm-response-container');
   const errorContainer = document.getElementById('llm-error-container');
 
   testBtn.addEventListener('click', async () => {
     const apiKey = apiKeyInput.value.trim();
     const prompt = promptInput.value.trim();
+    const endpoint = endpointSelect.value;
 
     // Hide previous results
     responseContainer.classList.add('hidden');
@@ -516,10 +584,10 @@ document.addEventListener('DOMContentLoaded', () => {
       testBtn.disabled = true;
       testBtn.textContent = 'Sending...';
 
-      const result = await testLLM(apiKey, prompt);
+      const result = await testLLM(apiKey, prompt, endpoint);
 
       // Display response
-      const message = result.choices[0]?.message?.content || 'No response';
+      const message = result.choices[0]?.message?.content || result.choices[0]?.message?.reasoning || 'No response';
       document.getElementById('llm-response-text').textContent = message;
 
       // Display token usage
@@ -527,8 +595,14 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('llm-prompt-tokens').textContent = formatNumber(usage.prompt_tokens || 0);
       document.getElementById('llm-completion-tokens').textContent = formatNumber(usage.completion_tokens || 0);
 
-      // Calculate cost (GPT-5 pricing)
-      const cost = (usage.prompt_tokens * 0.00000125) + (usage.completion_tokens * 0.00001);
+      // Calculate cost based on provider
+      let cost = 0;
+      if (endpoint === 'ollama') {
+        cost = 0; // Local inference is free
+      } else {
+        // GPT-5 pricing
+        cost = (usage.prompt_tokens * 0.00000125) + (usage.completion_tokens * 0.00001);
+      }
       document.getElementById('llm-cost').textContent = formatCurrency(cost);
 
       responseContainer.classList.remove('hidden');
@@ -689,6 +763,32 @@ function hideBlockchainTooltip(event) {
     clearInterval(tooltipUpdateInterval);
     tooltipUpdateInterval = null;
   }
+}
+
+// Copy to clipboard function
+function copyToClipboard(text, button) {
+  navigator.clipboard.writeText(text).then(() => {
+    // Store original text
+    const originalText = button.textContent;
+
+    // Show success feedback
+    button.textContent = '✓ Copied!';
+    button.classList.add('bg-green-100', 'text-green-700', 'border-green-300');
+    button.classList.remove('bg-white', 'hover:bg-gray-100');
+
+    // Reset after 2 seconds
+    setTimeout(() => {
+      button.textContent = originalText;
+      button.classList.remove('bg-green-100', 'text-green-700', 'border-green-300');
+      button.classList.add('bg-white', 'hover:bg-gray-100');
+    }, 2000);
+  }).catch(err => {
+    console.error('Failed to copy:', err);
+    button.textContent = '✗ Failed';
+    setTimeout(() => {
+      button.textContent = '📋 Copy';
+    }, 2000);
+  });
 }
 
 // Clean up on page unload

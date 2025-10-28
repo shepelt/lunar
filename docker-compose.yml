@@ -69,6 +69,8 @@ services:
       - ./kong/provision.sh:/provision.sh:ro
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OLLAMA_BACKEND_URL: ${OLLAMA_BACKEND_URL:-http://localhost:11434}
+      OLLAMA_MODEL_NAME: ${OLLAMA_MODEL_NAME:-gpt-oss:120b}
       DECK_VERSION: v1.41.1
     command: >
       sh -c "

@@ -132,9 +132,15 @@ router.post('/quota/log', async (req, res) => {
           completion_tokens = responseData.usage.completion_tokens || 0;
           total_tokens = responseData.usage.total_tokens || 0;
 
-          // Calculate cost based on GPT-5 pricing
-          // Input: $1.25 per 1M tokens, Output: $10.00 per 1M tokens
-          cost = (prompt_tokens * 0.00000125) + (completion_tokens * 0.00001);
+          // Calculate cost based on provider
+          if (provider === 'ollama') {
+            // Local models are free (on-premise inference)
+            cost = 0;
+          } else {
+            // GPT-5 pricing for OpenAI
+            // Input: $1.25 per 1M tokens, Output: $10.00 per 1M tokens
+            cost = (prompt_tokens * 0.00000125) + (completion_tokens * 0.00001);
+          }
         } else {
           console.warn('No usage data in response');
         }

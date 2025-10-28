@@ -5,7 +5,7 @@ import { initBlockchain } from './blockchain.js';
 
 dotenv.config();
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5872;
 
 async function start() {
   try {

@@ -203,14 +203,33 @@ PostgreSQL database (shared with Kong) with tables:
 
 ## Configuration
 
-The AI Proxy currently supports OpenAI. To add more providers:
+### LLM Providers
 
-1. Set provider API keys in `.env`:
+**Cloud LLM (OpenAI):**
 ```bash
+# .env
 OPENAI_API_KEY=sk-...
 ```
 
-2. Configure additional routes/plugins in `kong/kong.yaml`
+Access via: `http://localhost:8000/llm/v1/chat/completions`
+
+**Local LLM (Ollama) - Optional:**
+```bash
+# .env
+OLLAMA_BACKEND_URL=http://your-mac-studio.tailscale.ts.net:11434
+OLLAMA_MODEL_NAME=gpt-oss:120b
+```
+
+Access via: `http://localhost:8000/local-llm`
+
+**Features:**
+- Local models tracked with $0 cost
+- Usage and token counting still logged
+- Blockchain audit trail maintained
+- If not configured, `/local-llm` returns 502 (can be ignored)
+
+**Ollama Setup:**
+See [Ollama docs](https://ollama.com) for installation. Ensure Ollama listens on `0.0.0.0:11434` (not just localhost) for remote access.
 
 ## Testing
 

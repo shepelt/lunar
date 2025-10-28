@@ -282,6 +282,53 @@ router.get('/audit', async (req, res) => {
   }
 });
 
+// Get provider statistics
+router.get('/stats/providers', async (req, res) => {
+  try {
+    const query = `
+      SELECT
+        provider,
+        COUNT(*) as request_count,
+        SUM(prompt_tokens) as total_prompt_tokens,
+        SUM(completion_tokens) as total_completion_tokens,
+        SUM(total_tokens) as total_tokens,
+        SUM(cost) as total_cost
+      FROM usage_logs
+      WHERE status = 'success'
+      GROUP BY provider
+      ORDER BY total_cost DESC
+    `;
+
+    const result = await pool.query(query);
+
+    const stats = result.rows.map(row => ({
+      provider: row.provider,
+      requests: parseInt(row.request_count),
+      prompt_tokens: parseInt(row.total_prompt_tokens) || 0,
+      completion_tokens: parseInt(row.total_completion_tokens) || 0,
+      total_tokens: parseInt(row.total_tokens) || 0,
+      cost: parseFloat(row.total_cost)
+    }));
+
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get configuration
+router.get('/config', async (req, res) => {
+  try {
+    res.json({
+      ollama_model: process.env.OLLAMA_MODEL_NAME || 'gpt-oss:120b',
+      ollama_backend: process.env.OLLAMA_BACKEND_URL || 'http://localhost:11434',
+      lunar_endpoint_url: process.env.LUNAR_ENDPOINT_URL || 'http://localhost:8000'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Admin endpoint: Create new consumer in Kong
 router.post('/admin/consumers', async (req, res) => {
   try {
@@ -473,7 +520,7 @@ router.post('/llm/v1/chat/completions', async (req, res) => {
 // Proxy LLM requests (for dashboard testing - legacy endpoint)
 router.post('/llm-proxy', async (req, res) => {
   try {
-    const { api_key, prompt } = req.body;
+    const { api_key, prompt, provider = 'openai', model, max_tokens = 150 } = req.body;
 
     if (!api_key) {
       return res.status(400).json({ error: 'API key is required' });
@@ -485,17 +532,30 @@ router.post('/llm-proxy', async (req, res) => {
 
     const kongUrl = process.env.KONG_GATEWAY_URL || 'http://localhost:8000';
 
+    // Map provider to Kong endpoint
+    const endpointMap = {
+      'openai': '/llm/v1/chat/completions',
+      'ollama': '/local-llm'
+    };
+
+    const endpoint = endpointMap[provider] || endpointMap['openai'];
+
+    // Determine model based on provider
+    const modelName = model || (provider === 'ollama' ? process.env.OLLAMA_MODEL_NAME || 'gpt-oss:120b' : 'gpt-5');
+
     // Forward request to Kong
-    const response = await fetch(`${kongUrl}/llm/v1/chat/completions`, {
+    const response = await fetch(`${kongUrl}${endpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'apikey': api_key
       },
       body: JSON.stringify({
+        model: modelName,
         messages: [
           { role: 'user', content: prompt }
-        ]
+        ],
+        max_tokens: max_tokens
       })
     });
 

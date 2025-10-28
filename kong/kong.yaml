@@ -3,7 +3,7 @@ _format_version: "3.0"
 services:
   - name: lunar-backend
     host: host.docker.internal
-    port: 3000
+    port: 5872
     protocol: http
     routes:
       - name: backend-api
@@ -31,6 +31,23 @@ services:
           - http
           - https
         plugins:
+          - name: cors
+            config:
+              origins:
+                - "*"
+              methods:
+                - GET
+                - POST
+                - OPTIONS
+              headers:
+                - Accept
+                - Content-Type
+                - apikey
+                - Authorization
+              exposed_headers:
+                - X-Auth-Token
+              credentials: true
+              max_age: 3600
           - name: key-auth
             config:
               key_names:
@@ -40,7 +57,7 @@ services:
               hide_credentials: false
           - name: lunar-gateway
             config:
-              backend_url: http://host.docker.internal:3000
+              backend_url: http://host.docker.internal:5872
           - name: ai-proxy
             config:
               route_type: llm/v1/chat
@@ -53,3 +70,31 @@ services:
                 options:
                   temperature: 1.0
               max_request_body_size: 1048576  # 1MB limit for large requests (Dyad sends full codebase)
+
+  - name: ollama-service
+    url: ${OLLAMA_BACKEND_URL}/v1/chat/completions
+    routes:
+      - name: ollama-proxy
+        paths:
+          - /local-llm
+        strip_path: true
+        preserve_host: false
+        protocols:
+          - http
+          - https
+        plugins:
+          - name: key-auth
+            config:
+              key_names:
+                - apikey
+              key_in_header: true
+              key_in_query: true
+              hide_credentials: false
+          - name: response-transformer
+            config:
+              add:
+                headers:
+                  - X-Kong-LLM-Model:ollama/${OLLAMA_MODEL_NAME}
+          - name: lunar-gateway
+            config:
+              backend_url: http://host.docker.internal:5872

@@ -17,17 +17,18 @@
 - TASK-10: Automated tests with Jest
 - TASK-11: Cryptographic hashing (SHA256) of request/response for audit trail
 - TASK-12: Blockchain integration for immutable audit logs (HPP Sepolia)
+- TASK-13: Local LLM support through Ollama
 
 ## In Progress
 
 ## Future Ideas
-- TASK-13: Batching for quota logging (reduce DB calls)
-- TASK-14: In-memory caching for quota checks
-- TASK-15: Multi-provider LLM support
-- TASK-16: Streaming response support with real-time token counting
-- TASK-17: Time-based quota resets (daily/monthly limits)
-- TASK-18: Rate limiting (requests per minute/hour)
-- TASK-19: Webhook notifications for quota alerts
-- TASK-20: API documentation and client SDKs
-- TASK-21: Metrics export and monitoring dashboards
-- TASK-22: Multi-tenancy with organization hierarchies
+- Batching for quota logging (reduce DB calls)
+- In-memory caching for quota checks
+- Multi-provider LLM support
+- Streaming response support with real-time token counting
+- Time-based quota resets (daily/monthly limits)
+- Rate limiting (requests per minute/hour)
+- Webhook notifications for quota alerts
+- API documentation and client SDKs
+- Metrics export and monitoring dashboards
+- Multi-tenancy with organization hierarchies
