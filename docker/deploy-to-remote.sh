@@ -38,6 +38,10 @@ echo "✅ .env configured for $REMOTE_HOST"
 echo "📤 Transferring .env file..."
 scp "$TMP_ENV" "$REMOTE_HOST:~/lunar-airgap-deployment/.env"
 
+# Transfer updated docker-compose.yml
+echo "📤 Transferring updated docker-compose.yml..."
+scp "$SCRIPT_DIR/docker-compose.yml" "$REMOTE_HOST:~/lunar-airgap-deployment/docker-compose.yml"
+
 # Transfer updated image
 echo "📤 Transferring updated image..."
 rsync -avz --progress /tmp/lunar-super-fixed.tar $REMOTE_HOST:~/lunar-airgap-deployment/
@@ -61,8 +65,10 @@ echo "⏹️  Stopping existing containers..."
 echo "📦 Loading updated lunar-super image..."
 /usr/local/bin/docker load -i lunar-super-fixed.tar
 
-# Start services
+# Start services with architecture detection
 echo "🚀 Starting services..."
+export DECK_ARCH=$(uname -m | sed 's/aarch64/arm64/;s/x86_64/amd64/')
+echo "  Detected architecture: $DECK_ARCH"
 /usr/local/bin/docker-compose up -d
 
 # Wait a bit for services to initialize

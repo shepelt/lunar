@@ -10,4 +10,6 @@ export OLLAMA_MODEL_NAME="${OLLAMA_MODEL_NAME:-gpt-oss:120b}"
 envsubst < /kong-template.yaml > /tmp/kong.yaml
 
 # Sync Kong configuration
-deck gateway sync /tmp/kong.yaml --kong-addr=http://kong:8001
+# For super image deployment, Kong runs inside lunar-super container
+KONG_ADDR="${KONG_ADMIN_URL:-http://kong:8001}"
+deck gateway sync /tmp/kong.yaml --kong-addr="$KONG_ADDR"

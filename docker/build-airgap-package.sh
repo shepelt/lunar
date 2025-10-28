@@ -99,8 +99,8 @@ cat docker-compose.yml | \
   sed 's|build:|image: lunar-super:latest\n    # build:|' | \
   sed 's|context: ..|# context: ..|' | \
   sed 's|dockerfile: docker/Dockerfile|# dockerfile: docker/Dockerfile|' | \
-  sed 's|../kong/|./kong/|g' | \
-  sed 's|../kong-plugins/|./kong-plugins/|g' \
+  sed 's|\.\./kong/|./kong/|g' | \
+  sed 's|\.\./kong-plugins|./kong-plugins|g' \
   > "$PACKAGE_DIR/docker-compose.yml"
 
 # Step 5: Create deployment script
