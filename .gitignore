@@ -6,3 +6,9 @@ logs/
 dist/
 *.log
 .DS_Store
+
+# Docker build artifacts
+docker/lunar-airgap-deployment/
+docker/lunar-airgap-deployment.tar.gz
+docker/*.tar
+/tmp/lunar-super-fixed.tar

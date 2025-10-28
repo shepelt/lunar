@@ -18,6 +18,7 @@
 - TASK-11: Cryptographic hashing (SHA256) of request/response for audit trail
 - TASK-12: Blockchain integration for immutable audit logs (HPP Sepolia)
 - TASK-13: Local LLM support through Ollama
+- TASK-14: Docker containerization (super image) and air-gapped deployment tooling
 
 ## In Progress
 

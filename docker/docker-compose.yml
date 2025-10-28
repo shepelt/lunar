@@ -1,0 +1,135 @@
+# Lunar Gateway - Super Image Deployment
+# Simplified deployment with Kong + Backend combined in a single container
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: lunar-postgres
+    environment:
+      POSTGRES_USER: kong
+      POSTGRES_PASSWORD: kongpass
+      POSTGRES_DB: kong
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - lunar-network
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "kong"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kong-migrations:
+    image: kong:3.9.0
+    container_name: lunar-kong-migrations
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: postgres
+      KONG_PG_PORT: 5432
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kongpass
+      KONG_PG_DATABASE: kong
+    command: kong migrations bootstrap
+    networks:
+      - lunar-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+
+  lunar-super:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: lunar-super
+    environment:
+      # Kong Database Configuration
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: postgres
+      KONG_PG_PORT: 5432
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kongpass
+      KONG_PG_DATABASE: kong
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+
+      # Backend Database Configuration (same as Kong)
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: kong
+      POSTGRES_USER: kong
+      POSTGRES_PASSWORD: kongpass
+
+      # Kong URLs (internal to super container)
+      KONG_ADMIN_URL: http://localhost:8001
+      KONG_GATEWAY_URL: http://localhost:8000
+
+      # LLM Providers
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OLLAMA_BACKEND_URL: ${OLLAMA_BACKEND_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL_NAME: ${OLLAMA_MODEL_NAME:-gpt-oss:120b}
+
+      # Public endpoint
+      LUNAR_ENDPOINT_URL: ${LUNAR_ENDPOINT_URL:-http://localhost:8000}
+
+      # Blockchain
+      BLOCKCHAIN_PRIVATE_KEY: ${BLOCKCHAIN_PRIVATE_KEY}
+      BLOCKCHAIN_RPC_URL: ${BLOCKCHAIN_RPC_URL}
+      BLOCKCHAIN_CONTRACT_ADDRESS: ${BLOCKCHAIN_CONTRACT_ADDRESS}
+      STORE_FULL_REQUEST_RESPONSE: ${STORE_FULL_REQUEST_RESPONSE:-false}
+    ports:
+      - "5872:5872"  # Backend/Dashboard
+      - "8000:8000"  # Kong Proxy
+      - "8001:8001"  # Kong Admin API
+    volumes:
+      - ../kong-plugins:/usr/local/kong/custom-plugins:ro
+      - ../kong/kong.conf:/etc/kong/kong.conf:ro
+    networks:
+      - lunar-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kong-migrations:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "sh", "-c", "kong health && wget -q -O- http://localhost:5872/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  kong-provisioner:
+    image: alpine:latest
+    container_name: lunar-kong-provisioner
+    volumes:
+      - ../kong/kong.yaml:/kong-template.yaml:ro
+      - ../kong/provision.sh:/provision.sh:ro
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OLLAMA_BACKEND_URL: ${OLLAMA_BACKEND_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL_NAME: ${OLLAMA_MODEL_NAME:-gpt-oss:120b}
+      DECK_VERSION: v1.41.1
+    command: >
+      sh -c "
+        apk add --no-cache curl gettext &&
+        curl -sL https://github.com/kong/deck/releases/download/$${DECK_VERSION}/deck_$${DECK_VERSION#v}_linux_amd64.tar.gz | tar -xz -C /usr/local/bin &&
+        sleep 15 &&
+        /provision.sh
+      "
+    networks:
+      - lunar-network
+    depends_on:
+      lunar-super:
+        condition: service_healthy
+    restart: on-failure
+
+volumes:
+  postgres-data:
+
+networks:
+  lunar-network:
+    driver: bridge
