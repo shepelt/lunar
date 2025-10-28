@@ -69,6 +69,7 @@ services:
                 name: gpt-5
                 options:
                   temperature: 1.0
+                  max_tokens: null  # Kong 3.9.1+ treats null correctly (no limit)
               max_request_body_size: 1048576  # 1MB limit for large requests (Dyad sends full codebase)
 
   - name: ollama-service

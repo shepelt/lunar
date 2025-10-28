@@ -68,7 +68,7 @@ echo "📥 Pulling base images..."
 if [ "$INCLUDE_POSTGRES" = true ]; then
   docker pull postgres:15-alpine
 fi
-docker pull kong:3.9.0
+docker pull kong:3.9.1
 docker pull alpine:latest
 
 # Step 3: Save images as tarballs
@@ -81,8 +81,8 @@ if [ "$INCLUDE_POSTGRES" = true ]; then
   docker save -o "$PACKAGE_DIR/postgres-15-alpine.tar" postgres:15-alpine
 fi
 
-echo "  - kong:3.9.0..."
-docker save -o "$PACKAGE_DIR/kong-3.9.0.tar" kong:3.9.0
+echo "  - kong:3.9.1..."
+docker save -o "$PACKAGE_DIR/kong-3.9.1.tar" kong:3.9.1
 
 echo "  - alpine:latest..."
 docker save -o "$PACKAGE_DIR/alpine-latest.tar" alpine:latest
@@ -239,11 +239,11 @@ echo "  Uncompressed: $UNCOMPRESSED_SIZE"
 echo "  Compressed:   $COMPRESSED_SIZE"
 echo "  Location:     $SCRIPT_DIR/$PACKAGE_FILE"
 echo ""
-echo "📤 Transfer this file to your air-gapped machine:"
-echo "  scp $PACKAGE_FILE user@server:/tmp/"
+echo "🚀 Deploy to remote server:"
+echo "  npm run docker:deploy <hostname>"
+echo "  Example: npm run docker:deploy macserver.tailcdff5e.ts.net"
 echo ""
-echo "🚀 On the air-gapped machine:"
-echo "  tar -xzf $PACKAGE_FILE"
-echo "  cd $PACKAGE_DIR"
-echo "  ./deploy.sh"
+echo "Or manually transfer and extract:"
+echo "  scp $PACKAGE_FILE user@server:/tmp/"
+echo "  ssh user@server 'cd ~ && tar -xzf /tmp/$PACKAGE_FILE'"
 echo ""

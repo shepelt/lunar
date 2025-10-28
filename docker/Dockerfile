@@ -1,5 +1,5 @@
 # Lunar Super Image - Kong + Backend Combined
-FROM kong:3.9.0
+FROM kong:3.9.1
 
 # Switch to root for installations
 USER root

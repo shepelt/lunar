@@ -17,6 +17,19 @@ fi
 echo "🌙 Deploying updated Lunar to $REMOTE_HOST..."
 echo ""
 
+# Transfer and extract airgap package
+echo "📦 Transferring airgap package..."
+PACKAGE_FILE="lunar-airgap-deployment.tar.gz"
+if [ ! -f "$SCRIPT_DIR/$PACKAGE_FILE" ]; then
+  echo "❌ Error: $PACKAGE_FILE not found. Run 'npm run docker:build:airgap' first."
+  exit 1
+fi
+
+rsync -avz --progress "$SCRIPT_DIR/$PACKAGE_FILE" $REMOTE_HOST:/tmp/
+
+echo "📂 Extracting package on remote server..."
+ssh $REMOTE_HOST "cd ~ && tar -xzf /tmp/$PACKAGE_FILE && rm /tmp/$PACKAGE_FILE"
+
 # Prepare .env file with host-specific values
 echo "📝 Preparing .env file for $REMOTE_HOST..."
 if [ ! -f "$PROJECT_ROOT/.env" ]; then
@@ -28,23 +41,15 @@ fi
 TMP_ENV="/tmp/lunar-deploy-${REMOTE_HOST}.env"
 cat "$PROJECT_ROOT/.env" | \
   sed "s|LUNAR_ENDPOINT_URL=.*|LUNAR_ENDPOINT_URL=http://${REMOTE_HOST}:8000|" | \
-  sed "s|OLLAMA_BACKEND_URL=.*|OLLAMA_BACKEND_URL=http://localhost:11434|" | \
-  sed "s|BACKEND_URL=.*|BACKEND_URL=http://localhost:5872|" \
+  sed "s|^BACKEND_URL=.*|BACKEND_URL=http://localhost:5872|" | \
+  sed "s|OLLAMA_BACKEND_URL=.*|OLLAMA_BACKEND_URL=http://host.docker.internal:11434|" \
   > "$TMP_ENV"
 
 echo "✅ .env configured for $REMOTE_HOST"
 
-# Transfer .env file
-echo "📤 Transferring .env file..."
+# Transfer .env file (overwrites the one from tarball)
+echo "📤 Transferring configured .env file..."
 scp "$TMP_ENV" "$REMOTE_HOST:~/lunar-airgap-deployment/.env"
-
-# Transfer updated docker-compose.yml
-echo "📤 Transferring updated docker-compose.yml..."
-scp "$SCRIPT_DIR/docker-compose.yml" "$REMOTE_HOST:~/lunar-airgap-deployment/docker-compose.yml"
-
-# Transfer updated image
-echo "📤 Transferring updated image..."
-rsync -avz --progress /tmp/lunar-super-fixed.tar $REMOTE_HOST:~/lunar-airgap-deployment/
 
 # Clean up temp file
 rm "$TMP_ENV"
@@ -61,9 +66,10 @@ cd ~/lunar-airgap-deployment
 echo "⏹️  Stopping existing containers..."
 /usr/local/bin/docker-compose down || true
 
-# Load new image
-echo "📦 Loading updated lunar-super image..."
-/usr/local/bin/docker load -i lunar-super-fixed.tar
+# Load new images
+echo "📦 Loading updated images..."
+/usr/local/bin/docker load -i lunar-super.tar
+/usr/local/bin/docker load -i kong-3.9.1.tar
 
 # Start services with architecture detection
 echo "🚀 Starting services..."

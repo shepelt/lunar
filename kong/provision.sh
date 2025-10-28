@@ -11,5 +11,6 @@ envsubst < /kong-template.yaml > /tmp/kong.yaml
 
 # Sync Kong configuration
 # For super image deployment, Kong runs inside lunar-super container
+# --skip-consumers: Don't manage consumers (they're managed by backend API)
 KONG_ADDR="${KONG_ADMIN_URL:-http://kong:8001}"
-deck gateway sync /tmp/kong.yaml --kong-addr="$KONG_ADDR"
+deck gateway sync /tmp/kong.yaml --kong-addr="$KONG_ADDR" --skip-consumers
