@@ -535,8 +535,8 @@ async function testLLM(apiKey, prompt, provider) {
     body: JSON.stringify({
       api_key: apiKey,
       prompt: prompt,
-      provider: provider,
-      max_tokens: 150
+      provider: provider
+      // No max_tokens - let the model respond naturally
     })
   });
 

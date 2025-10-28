@@ -2,7 +2,7 @@ local http = require "resty.http"
 local cjson = require "cjson.safe"
 
 local LunarGatewayHandler = {
-  PRIORITY = 1000,
+  PRIORITY = 1100,  -- Run before ai-proxy (priority ~800)
   VERSION = "1.0.0"
 }
 
@@ -36,11 +36,44 @@ local function call_backend_sync(method, url, body)
   return data, nil
 end
 
+-- Rewrite phase: Modify request body before other plugins read it
+function LunarGatewayHandler:rewrite(conf)
+  kong.log.err("[DEBUG] ========== LunarGatewayHandler:rewrite() START ==========")
+
+  -- Try to get body from memory first
+  local request_body, err = kong.request.get_raw_body()
+
+  if request_body then
+    kong.log.err("[DEBUG] REWRITE: Body captured, length: ", string.len(request_body))
+    local body_json, decode_err = cjson.decode(request_body)
+
+    if body_json then
+      local model = body_json.model or ""
+      local is_gpt5_or_o1 = model:match("^gpt%-5") or model:match("^gpt%-5%-") or model:match("^o1")
+
+      -- Transform max_tokens → max_completion_tokens for GPT-5/o1
+      if is_gpt5_or_o1 and body_json.max_tokens and not body_json.max_completion_tokens then
+        kong.log.err("[DEBUG] REWRITE: Transforming for model: ", model)
+        body_json.max_completion_tokens = body_json.max_tokens
+        body_json.max_tokens = nil
+
+        local new_body = cjson.encode(body_json)
+        ngx.req.read_body()
+        ngx.req.set_body_data(new_body)
+        kong.log.err("[DEBUG] REWRITE: Transformation applied: ", new_body)
+      end
+    end
+  end
+end
+
 -- Access phase: Check quota before allowing request
 function LunarGatewayHandler:access(conf)
+  kong.log.err("[DEBUG] ========== LunarGatewayHandler:access() START ==========")
+
   -- Capture request body (must be done in access phase before proxying)
   -- Try to get body from memory first
   local request_body, err = kong.request.get_raw_body()
+  kong.log.err("[DEBUG] get_raw_body result: ", request_body and "NOT NIL" or "NIL", ", err: ", err or "none")
 
   if request_body then
     kong.ctx.plugin.request_body = request_body
@@ -78,31 +111,76 @@ function LunarGatewayHandler:access(conf)
     end
   end
 
-  -- Modify request body to include stream_options for usage tracking (OpenAI only)
+  -- Modify request body for provider compatibility
   if request_body then
+    kong.log.err("[DEBUG] Request body captured, length: ", string.len(request_body))
     local body_json, decode_err = cjson.decode(request_body)
 
-    if body_json and body_json.stream then
+    if body_json then
+      local modified = false
+
       -- Detect provider from model name or default to OpenAI
       local model = body_json.model or ""
+      kong.log.err("[DEBUG] Model detected: ", model)
       local is_openai = model:match("^gpt") or model:match("^o1") or model == ""
+      local is_gpt5_or_o1 = model:match("^gpt%-5") or model:match("^gpt%-5%-") or model:match("^o1")
+      local is_ollama = not is_openai  -- Non-OpenAI models are Ollama
+      kong.log.err("[DEBUG] is_openai=", is_openai, " is_gpt5_or_o1=", is_gpt5_or_o1, " is_ollama=", is_ollama)
+      kong.log.err("[DEBUG] max_tokens=", body_json.max_tokens, " max_completion_tokens=", body_json.max_completion_tokens)
 
-      -- Only add stream_options for OpenAI models
-      if is_openai and not body_json.stream_options then
+      -- Transform max_tokens ↔ max_completion_tokens based on provider
+      -- Accept both parameters, transform to what provider expects
+      kong.log.err("[DEBUG] Checking transformation... is_gpt5_or_o1=", is_gpt5_or_o1)
+      if is_gpt5_or_o1 then
+        kong.log.err("[DEBUG] Entered GPT-5/o1 block")
+        -- GPT-5/o1 models: Use max_completion_tokens
+        if body_json.max_tokens and not body_json.max_completion_tokens then
+          kong.log.err("[DEBUG] TRANSFORMING max_tokens (", body_json.max_tokens, ") → max_completion_tokens")
+          body_json.max_completion_tokens = body_json.max_tokens
+          body_json.max_tokens = nil
+          modified = true
+          kong.log.err("Transformed max_tokens → max_completion_tokens for model: ", model)
+        else
+          kong.log.err("[DEBUG] NOT transforming. max_tokens=", body_json.max_tokens, " max_completion_tokens=", body_json.max_completion_tokens)
+        end
+      elseif is_ollama then
+        -- Ollama models: Use max_tokens
+        if body_json.max_completion_tokens and not body_json.max_tokens then
+          body_json.max_tokens = body_json.max_completion_tokens
+          body_json.max_completion_tokens = nil
+          modified = true
+          kong.log.info("Transformed max_completion_tokens → max_tokens for Ollama model: ", model)
+        end
+      end
+      -- GPT-4 and older OpenAI models: Keep max_tokens as-is (no transformation needed)
+
+      -- Add stream_options for usage tracking (OpenAI streaming only)
+      if body_json.stream and is_openai and not body_json.stream_options then
         body_json.stream_options = {
           include_usage = true
         }
-
-        -- Re-encode and update the request body
-        local new_body = cjson.encode(body_json)
-        kong.service.request.set_raw_body(new_body)
-
-        -- Update the captured body in context
-        kong.ctx.plugin.request_body = new_body
-
+        modified = true
         kong.log.info("Added stream_options for OpenAI model: ", model)
+      end
+
+      -- Apply modifications if any were made
+      if modified then
+        local new_body = cjson.encode(body_json)
+        kong.log.err("[DEBUG] APPLYING modified body: ", new_body)
+
+        -- Update the request body so other plugins see the modification
+        ngx.req.read_body()
+        ngx.req.set_body_data(new_body)
+
+        -- Also update for the upstream service
+        kong.service.request.set_raw_body(new_body)
+        kong.service.request.set_header("Content-Length", string.len(new_body))
+
+        -- Store in context
+        kong.ctx.plugin.request_body = new_body
+        kong.log.err("[DEBUG] Modified body applied successfully, new length: ", string.len(new_body))
       else
-        kong.log.debug("Skipping stream_options for non-OpenAI model: ", model)
+        kong.log.err("[DEBUG] No modifications made, body unchanged")
       end
     end
   end

@@ -26,6 +26,7 @@ RUN npm ci --only=production
 # Copy backend application
 COPY src/ ./src/
 COPY public/ ./public/
+COPY contracts/ ./contracts/
 
 # Copy Kong configuration
 COPY kong/ /kong/

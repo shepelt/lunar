@@ -460,11 +460,8 @@ router.post('/llm/v1/chat/completions', async (req, res) => {
       requestBody.model = 'gpt-5'; // Use the model configured in kong.yaml
     }
 
-    // Transform max_tokens to max_completion_tokens for GPT-5 compatibility
-    if (requestBody.max_tokens !== undefined) {
-      requestBody.max_completion_tokens = requestBody.max_tokens;
-      delete requestBody.max_tokens;
-    }
+    // Note: Kong's lunar-gateway plugin handles max_tokens ↔ max_completion_tokens
+    // transformation based on provider (GPT-5/o1 vs Ollama). Backend stays transparent.
 
     // Forward request to Kong with apikey header
     const response = await fetch(`${kongUrl}/llm/v1/chat/completions`, {
@@ -520,7 +517,7 @@ router.post('/llm/v1/chat/completions', async (req, res) => {
 // Proxy LLM requests (for dashboard testing - legacy endpoint)
 router.post('/llm-proxy', async (req, res) => {
   try {
-    const { api_key, prompt, provider = 'openai', model, max_tokens = 150 } = req.body;
+    const { api_key, prompt, provider = 'openai', model, max_tokens } = req.body;
 
     if (!api_key) {
       return res.status(400).json({ error: 'API key is required' });
@@ -555,7 +552,7 @@ router.post('/llm-proxy', async (req, res) => {
         messages: [
           { role: 'user', content: prompt }
         ],
-        max_tokens: max_tokens
+        ...(max_tokens && { max_tokens })  // Only include if provided
       })
     });
 
