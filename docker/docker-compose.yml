@@ -3,7 +3,7 @@
 
 services:
   postgres:
-    image: postgres:15
+    image: postgres:15-alpine
     container_name: lunar-postgres
     environment:
       POSTGRES_USER: kong

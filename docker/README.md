@@ -173,19 +173,19 @@ cd ~/lunar/docker
 docker-compose build lunar-super
 
 # Pull required base images
-docker pull postgres:15
+docker pull postgres:15-alpine
 docker pull kong:3.9.0
 docker pull alpine:latest
 
 # Save images as tarballs
 docker save -o lunar-super.tar lunar-super:latest
-docker save -o postgres-15.tar postgres:15
+docker save -o postgres-15-alpine.tar postgres:15-alpine
 docker save -o kong-3.9.0.tar kong:3.9.0
 docker save -o alpine-latest.tar alpine:latest
 
 # Create deployment package
 mkdir lunar-airgap-deployment
-cp lunar-super.tar postgres-15.tar kong-3.9.0.tar alpine-latest.tar lunar-airgap-deployment/
+cp lunar-super.tar postgres-15-alpine.tar kong-3.9.0.tar alpine-latest.tar lunar-airgap-deployment/
 cp docker-compose.yml lunar-airgap-deployment/
 cp -r ../kong lunar-airgap-deployment/
 cp -r ../kong-plugins lunar-airgap-deployment/
@@ -198,7 +198,7 @@ set -e
 
 echo "Loading Docker images..."
 docker load -i lunar-super.tar
-docker load -i postgres-15.tar
+docker load -i postgres-15-alpine.tar
 docker load -i kong-3.9.0.tar
 docker load -i alpine-latest.tar
 
@@ -223,10 +223,10 @@ echo "Transfer this file to your air-gapped machine"
 ```
 lunar-airgap-deployment.tar.gz
 └── lunar-airgap-deployment/
-    ├── lunar-super.tar          # Lunar application image (~500MB)
-    ├── postgres-15.tar          # PostgreSQL database (~150MB)
-    ├── kong-3.9.0.tar          # Kong Gateway (~200MB)
-    ├── alpine-latest.tar        # Alpine Linux (~3MB)
+    ├── lunar-super.tar          # Lunar application image (~200MB)
+    ├── postgres-15-alpine.tar   # PostgreSQL database Alpine (~50MB)
+    ├── kong-3.9.0.tar          # Kong Gateway (~120MB)
+    ├── alpine-latest.tar        # Alpine Linux (~4MB)
     ├── docker-compose.yml       # Deployment configuration
     ├── deploy.sh               # Deployment script
     ├── .env.example            # Configuration template
@@ -267,10 +267,10 @@ curl http://localhost:5872/health
 docker images | grep -E 'lunar-super|postgres|kong|alpine'
 
 # Expected output:
-# lunar-super       latest    ...    500MB
-# postgres          15        ...    150MB
-# kong              3.9.0     ...    200MB
-# alpine            latest    ...    3MB
+# lunar-super       latest    ...    937MB
+# postgres          15-alpine ...    230MB
+# kong              3.9.0     ...    550MB
+# alpine            latest    ...    13MB
 
 # Check running containers
 docker-compose ps
@@ -289,7 +289,7 @@ curl http://localhost:8001/status        # Kong status
 ✅ Faster deployment (no downloads)
 ✅ Suitable for secure/classified networks
 
-**Package Size:** ~850MB total (compressed to ~300MB)
+**Package Size:** ~380MB total (compressed to ~150MB)
 
 **Updates:** To update an air-gapped deployment:
 1. Build new images on internet-connected machine

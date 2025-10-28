@@ -43,7 +43,7 @@ docker tag "$BUILT_IMAGE" lunar-super:latest
 
 # Step 2: Pull base images
 echo "📥 Pulling base images..."
-docker pull postgres:15
+docker pull postgres:15-alpine
 docker pull kong:3.9.0
 docker pull alpine:latest
 
@@ -52,8 +52,8 @@ echo "💾 Saving Docker images as tarballs..."
 echo "  - lunar-super (this may take a few minutes)..."
 docker save -o "$PACKAGE_DIR/lunar-super.tar" lunar-super:latest
 
-echo "  - postgres:15..."
-docker save -o "$PACKAGE_DIR/postgres-15.tar" postgres:15
+echo "  - postgres:15-alpine..."
+docker save -o "$PACKAGE_DIR/postgres-15-alpine.tar" postgres:15-alpine
 
 echo "  - kong:3.9.0..."
 docker save -o "$PACKAGE_DIR/kong-3.9.0.tar" kong:3.9.0
@@ -102,8 +102,8 @@ echo "Loading Docker images..."
 echo "  - lunar-super.tar..."
 docker load -i lunar-super.tar
 
-echo "  - postgres-15.tar..."
-docker load -i postgres-15.tar
+echo "  - postgres-15-alpine.tar..."
+docker load -i postgres-15-alpine.tar
 
 echo "  - kong-3.9.0.tar..."
 docker load -i kong-3.9.0.tar
@@ -134,16 +134,16 @@ This package contains everything needed to deploy Lunar Gateway on a
 machine without internet access or GitHub access.
 
 CONTENTS:
-  - lunar-super.tar     : Lunar application (Kong + Backend)
-  - postgres-15.tar     : PostgreSQL database
-  - kong-3.9.0.tar      : Kong Gateway base image
-  - alpine-latest.tar   : Alpine Linux (for provisioner)
-  - docker-compose.yml  : Deployment configuration
-  - kong/               : Kong configuration files
-  - kong-plugins/       : Custom Kong plugins
-  - .env.example        : Configuration template
-  - deploy.sh           : Deployment script
-  - README.txt          : This file
+  - lunar-super.tar        : Lunar application (Kong + Backend)
+  - postgres-15-alpine.tar : PostgreSQL database (Alpine Linux)
+  - kong-3.9.0.tar         : Kong Gateway base image
+  - alpine-latest.tar      : Alpine Linux (for provisioner)
+  - docker-compose.yml     : Deployment configuration
+  - kong/                  : Kong configuration files
+  - kong-plugins/          : Custom Kong plugins
+  - .env.example           : Configuration template
+  - deploy.sh              : Deployment script
+  - README.txt             : This file
 
 PREREQUISITES:
   - Docker Engine 20.10+
