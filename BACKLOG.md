@@ -19,6 +19,7 @@
 - TASK-12: Blockchain integration for immutable audit logs (HPP Sepolia)
 - TASK-13: Local LLM support through Ollama
 - TASK-14: Docker containerization (super image) and air-gapped deployment tooling
+- TASK-15: Blockchain nonce management - sequential queue to prevent concurrent transaction nonce collisions
 
 ## In Progress
 

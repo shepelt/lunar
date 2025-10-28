@@ -1,6 +1,7 @@
 import express from 'express';
 import { nanoid } from 'nanoid';
 import { pool } from './db.js';
+import { isBlockchainEnabled, getBlockchainStats, logToBlockchain } from './blockchain.js';
 
 const router = express.Router();
 
@@ -180,6 +181,25 @@ router.post('/audit', async (req, res) => {
       WHERE consumer_id = $2
     `, [cost, consumerId]);
 
+    // Log to blockchain if enabled
+    if (isBlockchainEnabled()) {
+      try {
+        await logToBlockchain({
+          logId: id,
+          consumerId,
+          provider,
+          model,
+          promptTokens: prompt_tokens,
+          completionTokens: completion_tokens,
+          requestHash: 'test-request-hash',
+          responseHash: 'test-response-hash'
+        });
+      } catch (error) {
+        console.error('Blockchain logging failed:', error.message);
+        // Don't fail the request if blockchain logging fails
+      }
+    }
+
     res.json({ id, cost, total_tokens, consumer_id: consumerId });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -319,11 +339,24 @@ router.get('/stats/providers', async (req, res) => {
 // Get configuration
 router.get('/config', async (req, res) => {
   try {
-    res.json({
+    const blockchain_enabled = isBlockchainEnabled();
+    const response = {
       ollama_model: process.env.OLLAMA_MODEL_NAME || 'gpt-oss:120b',
       ollama_backend: process.env.OLLAMA_BACKEND_URL || 'http://localhost:11434',
-      lunar_endpoint_url: process.env.LUNAR_ENDPOINT_URL || 'http://localhost:8000'
-    });
+      lunar_endpoint_url: process.env.LUNAR_ENDPOINT_URL || 'http://localhost:8000',
+      blockchain_enabled
+    };
+
+    // Include blockchain stats if enabled
+    if (blockchain_enabled) {
+      try {
+        response.blockchain_stats = await getBlockchainStats();
+      } catch (error) {
+        console.error('Failed to get blockchain stats:', error.message);
+      }
+    }
+
+    res.json(response);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
