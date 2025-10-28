@@ -113,10 +113,11 @@ services:
       OLLAMA_BACKEND_URL: ${OLLAMA_BACKEND_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL_NAME: ${OLLAMA_MODEL_NAME:-gpt-oss:120b}
       DECK_VERSION: v1.41.1
+      DECK_ARCH: ${DECK_ARCH:-arm64}
     command: >
       sh -c "
         apk add --no-cache curl gettext &&
-        curl -sL https://github.com/kong/deck/releases/download/$${DECK_VERSION}/deck_$${DECK_VERSION#v}_linux_amd64.tar.gz | tar -xz -C /usr/local/bin &&
+        curl -sL https://github.com/kong/deck/releases/download/$${DECK_VERSION}/deck_$${DECK_VERSION#v}_linux_$${DECK_ARCH}.tar.gz | tar -xz -C /usr/local/bin &&
         sleep 15 &&
         /provision.sh
       "

@@ -2,6 +2,9 @@
 # Build Lunar Air-Gapped Deployment Package
 # This script creates a complete deployment package that can be transferred
 # to machines without internet access or GitHub access.
+#
+# Usage: ./build-airgap-package.sh [--no-postgres]
+#   --no-postgres    Exclude PostgreSQL from package (useful if target has PostgreSQL)
 
 set -e
 
@@ -10,8 +13,27 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 PACKAGE_DIR="lunar-airgap-deployment"
 PACKAGE_FILE="lunar-airgap-deployment.tar.gz"
 
+# Parse command line arguments
+INCLUDE_POSTGRES=true
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --no-postgres)
+      INCLUDE_POSTGRES=false
+      shift
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Usage: $0 [--no-postgres]"
+      exit 1
+      ;;
+  esac
+done
+
 echo "🌙 Building Lunar Air-Gapped Deployment Package"
 echo "================================================"
+if [ "$INCLUDE_POSTGRES" = false ]; then
+  echo "⚠️  PostgreSQL will be EXCLUDED from this package"
+fi
 echo ""
 
 # Clean up previous builds
@@ -43,7 +65,9 @@ docker tag "$BUILT_IMAGE" lunar-super:latest
 
 # Step 2: Pull base images
 echo "📥 Pulling base images..."
-docker pull postgres:15-alpine
+if [ "$INCLUDE_POSTGRES" = true ]; then
+  docker pull postgres:15-alpine
+fi
 docker pull kong:3.9.0
 docker pull alpine:latest
 
@@ -52,8 +76,10 @@ echo "💾 Saving Docker images as tarballs..."
 echo "  - lunar-super (this may take a few minutes)..."
 docker save -o "$PACKAGE_DIR/lunar-super.tar" lunar-super:latest
 
-echo "  - postgres:15-alpine..."
-docker save -o "$PACKAGE_DIR/postgres-15-alpine.tar" postgres:15-alpine
+if [ "$INCLUDE_POSTGRES" = true ]; then
+  echo "  - postgres:15-alpine..."
+  docker save -o "$PACKAGE_DIR/postgres-15-alpine.tar" postgres:15-alpine
+fi
 
 echo "  - kong:3.9.0..."
 docker save -o "$PACKAGE_DIR/kong-3.9.0.tar" kong:3.9.0
@@ -102,8 +128,12 @@ echo "Loading Docker images..."
 echo "  - lunar-super.tar..."
 docker load -i lunar-super.tar
 
-echo "  - postgres-15-alpine.tar..."
-docker load -i postgres-15-alpine.tar
+if [ -f "postgres-15-alpine.tar" ]; then
+  echo "  - postgres-15-alpine.tar..."
+  docker load -i postgres-15-alpine.tar
+else
+  echo "  ⚠️  PostgreSQL not included - ensure postgres:15-alpine is available"
+fi
 
 echo "  - kong-3.9.0.tar..."
 docker load -i kong-3.9.0.tar
@@ -126,7 +156,7 @@ chmod +x "$PACKAGE_DIR/deploy.sh"
 
 # Step 6: Create README
 echo "📖 Creating deployment README..."
-cat > "$PACKAGE_DIR/README.txt" << 'EOF'
+cat > "$PACKAGE_DIR/README.txt" << EOF
 Lunar Gateway - Air-Gapped Deployment Package
 ==============================================
 
@@ -135,7 +165,7 @@ machine without internet access or GitHub access.
 
 CONTENTS:
   - lunar-super.tar        : Lunar application (Kong + Backend)
-  - postgres-15-alpine.tar : PostgreSQL database (Alpine Linux)
+$([ "$INCLUDE_POSTGRES" = true ] && echo "  - postgres-15-alpine.tar : PostgreSQL database (Alpine Linux)" || echo "  (PostgreSQL not included - use existing installation)")
   - kong-3.9.0.tar         : Kong Gateway base image
   - alpine-latest.tar      : Alpine Linux (for provisioner)
   - docker-compose.yml     : Deployment configuration
@@ -148,6 +178,7 @@ CONTENTS:
 PREREQUISITES:
   - Docker Engine 20.10+
   - Docker Compose 2.0+
+$([ "$INCLUDE_POSTGRES" = false ] && echo "  - PostgreSQL 15 (Alpine) - must be available as postgres:15-alpine image")
 
 DEPLOYMENT STEPS:
 

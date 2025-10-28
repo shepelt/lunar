@@ -18,6 +18,7 @@
     "docker:restart": "docker-compose restart kong",
     "docker:build": "cd docker && docker-compose build lunar-super",
     "docker:build:airgap": "cd docker && ./build-airgap-package.sh",
+    "docker:build:airgap:no-postgres": "cd docker && ./build-airgap-package.sh --no-postgres",
     "docker:deploy": "cd docker && bash deploy-to-remote.sh",
     "kong:reload": "docker-compose exec kong kong reload",
     "kong:health": "curl -i http://localhost:8001/status",
