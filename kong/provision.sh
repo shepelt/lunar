@@ -31,8 +31,8 @@ if [ -z "$CONSUMER_ID" ]; then
 fi
 
 # Create or update basic-auth credential
-# First, get existing credential ID if it exists
-EXISTING_CRED_ID=$(curl -s "$KONG_ADDR/consumers/lunar-admin/basic-auth" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+# First, get existing credential ID if it exists (match ,"id":" to get credential ID, not consumer ID)
+EXISTING_CRED_ID=$(curl -s "$KONG_ADDR/consumers/lunar-admin/basic-auth" | grep -o ',"id":"[^"]*"' | head -1 | cut -d'"' -f4)
 
 # Delete existing credential if found
 if [ -n "$EXISTING_CRED_ID" ]; then
@@ -40,9 +40,11 @@ if [ -n "$EXISTING_CRED_ID" ]; then
 fi
 
 # Create new credential with current password from environment
+# Use form-encoded data to properly handle special characters in password
 curl -s -X POST "$KONG_ADDR/consumers/lunar-admin/basic-auth" \
-  -H "Content-Type: application/json" \
-  -d "{\"username\": \"$ADMIN_USERNAME\", \"password\": \"$ADMIN_PASSWORD\"}" \
-  > /dev/null
+  --data-urlencode "username=$ADMIN_USERNAME" \
+  --data-urlencode "password=$ADMIN_PASSWORD" \
+  > /dev/null 2>&1 \
+  || echo "Warning: Failed to create basic-auth credential"
 
 echo "Admin basic-auth configured for user: $ADMIN_USERNAME"
