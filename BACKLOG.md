@@ -20,6 +20,7 @@
 - TASK-13: Local LLM support through Ollama
 - TASK-14: Docker containerization (super image) and air-gapped deployment tooling
 - TASK-15: Blockchain nonce management - sequential queue to prevent concurrent transaction nonce collisions
+- TASK-16: Consolidated routing for LLM and admin dashboard through Kong (single port exposure via Tailscale funnel)
 
 ## In Progress
 
