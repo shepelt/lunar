@@ -135,8 +135,8 @@ else
   echo "  ⚠️  PostgreSQL not included - ensure postgres:15-alpine is available"
 fi
 
-echo "  - kong-3.9.0.tar..."
-docker load -i kong-3.9.0.tar
+echo "  - kong-3.9.1.tar..."
+docker load -i kong-3.9.1.tar
 
 echo "  - alpine-latest.tar..."
 docker load -i alpine-latest.tar
@@ -166,7 +166,7 @@ machine without internet access or GitHub access.
 CONTENTS:
   - lunar-super.tar        : Lunar application (Kong + Backend)
 $([ "$INCLUDE_POSTGRES" = true ] && echo "  - postgres-15-alpine.tar : PostgreSQL database (Alpine Linux)" || echo "  (PostgreSQL not included - use existing installation)")
-  - kong-3.9.0.tar         : Kong Gateway base image
+  - kong-3.9.1.tar         : Kong Gateway base image
   - alpine-latest.tar      : Alpine Linux (for provisioner)
   - docker-compose.yml     : Deployment configuration
   - kong/                  : Kong configuration files
