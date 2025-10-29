@@ -30,35 +30,31 @@ rsync -avz --progress "$SCRIPT_DIR/$PACKAGE_FILE" $REMOTE_HOST:/tmp/
 echo "📂 Extracting package on remote server..."
 ssh $REMOTE_HOST "cd ~ && tar -xzf /tmp/$PACKAGE_FILE && rm /tmp/$PACKAGE_FILE"
 
-# Prepare .env file with host-specific values
-echo "📝 Preparing .env file for $REMOTE_HOST..."
-if [ ! -f "$PROJECT_ROOT/.env" ]; then
-  echo "❌ Error: .env file not found at $PROJECT_ROOT/.env"
-  exit 1
-fi
-
-# Create temporary .env with substituted values
-TMP_ENV="/tmp/lunar-deploy-${REMOTE_HOST}.env"
-cat "$PROJECT_ROOT/.env" | \
-  sed "s|LUNAR_ENDPOINT_URL=.*|LUNAR_ENDPOINT_URL=http://${REMOTE_HOST}:8000|" | \
-  sed "s|^BACKEND_URL=.*|BACKEND_URL=http://localhost:5872|" | \
-  sed "s|OLLAMA_BACKEND_URL=.*|OLLAMA_BACKEND_URL=http://host.docker.internal:11434|" \
-  > "$TMP_ENV"
-
-echo "✅ .env configured for $REMOTE_HOST"
-
-# Transfer .env file only if it doesn't exist on remote
-echo "📤 Checking .env on remote server..."
+# Create .env only if it doesn't exist on remote
+echo "📝 Checking for .env on remote server..."
 if ssh $REMOTE_HOST "[ -f ~/lunar-airgap-deployment/.env ]"; then
   echo "✅ Preserving existing .env file on remote server"
-  echo "   (To update .env, manually edit it on $REMOTE_HOST or delete it before deploying)"
 else
-  echo "📤 Transferring configured .env file (first time setup)..."
-  scp "$TMP_ENV" "$REMOTE_HOST:~/lunar-airgap-deployment/.env"
-fi
+  echo "📝 Creating new .env file for $REMOTE_HOST (first time setup)..."
+  if [ ! -f "$PROJECT_ROOT/.env" ]; then
+    echo "❌ Error: .env file not found at $PROJECT_ROOT/.env"
+    exit 1
+  fi
 
-# Clean up temp file
-rm "$TMP_ENV"
+  # Create temporary .env with substituted values
+  TMP_ENV="/tmp/lunar-deploy-${REMOTE_HOST}.env"
+  cat "$PROJECT_ROOT/.env" | \
+    sed "s|LUNAR_ENDPOINT_URL=.*|LUNAR_ENDPOINT_URL=http://${REMOTE_HOST}:8000|" | \
+    sed "s|^BACKEND_URL=.*|BACKEND_URL=http://localhost:5872|" | \
+    sed "s|OLLAMA_BACKEND_URL=.*|OLLAMA_BACKEND_URL=http://host.docker.internal:11434|" \
+    > "$TMP_ENV"
+
+  echo "📤 Transferring configured .env file..."
+  scp "$TMP_ENV" "$REMOTE_HOST:~/lunar-airgap-deployment/.env"
+
+  # Clean up temp file
+  rm "$TMP_ENV"
+fi
 
 # Deploy on remote server
 echo ""

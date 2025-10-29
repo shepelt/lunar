@@ -69,6 +69,7 @@ services:
       - ./kong/provision.sh:/provision.sh:ro
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      BACKEND_URL: ${BACKEND_URL:-http://host.docker.internal:5872}
       OLLAMA_BACKEND_URL: ${OLLAMA_BACKEND_URL:-http://localhost:11434}
       OLLAMA_MODEL_NAME: ${OLLAMA_MODEL_NAME:-gpt-oss:120b}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}

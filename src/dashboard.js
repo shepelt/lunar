@@ -269,14 +269,17 @@ router.get('/audit', async (req, res) => {
     `;
     const params = [];
 
-    // Filter by consumer if authenticated via Kong
-    if (req.consumer) {
+    // Filter by consumer if authenticated via Kong (but not for admin users)
+    if (req.consumer && req.consumer.username !== 'lunar-admin') {
+      // Regular consumers only see their own logs
       params.push(req.consumer.id);
       query += ` AND consumer_id = $${params.length}`;
     } else if (req.query.consumer_id) {
+      // Admin can filter by specific consumer_id via query param
       params.push(req.query.consumer_id);
       query += ` AND consumer_id = $${params.length}`;
     }
+    // If consumer is lunar-admin or no consumer, show all logs
 
     params.push(parseInt(limit));
     query += ` ORDER BY created_at DESC LIMIT $${params.length}`;
@@ -576,7 +579,7 @@ router.post('/llm-proxy', async (req, res) => {
     // Map provider to Kong endpoint
     const endpointMap = {
       'openai': '/llm/v1/chat/completions',
-      'ollama': '/local-llm'
+      'ollama': '/local-llm/v1/chat/completions'
     };
 
     const endpoint = endpointMap[provider] || endpointMap['openai'];
@@ -600,7 +603,20 @@ router.post('/llm-proxy', async (req, res) => {
       })
     });
 
-    const data = await response.json();
+    // Try to parse as JSON, fall back to text if it fails
+    let data;
+    const contentType = response.headers.get('content-type');
+
+    try {
+      data = await response.json();
+    } catch (jsonError) {
+      // If JSON parsing fails, get the raw text
+      const text = await response.text();
+      data = {
+        error: `Invalid JSON response from LLM provider: ${text.substring(0, 200)}`,
+        raw_response: text.substring(0, 500)
+      };
+    }
 
     if (!response.ok) {
       return res.status(response.status).json(data);

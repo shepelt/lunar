@@ -249,7 +249,7 @@ function renderProvidersCombined(stats, config) {
       textColor: 'text-blue-700',
       name: 'Ollama (Local)',
       description: config.ollama_model || 'gpt-oss:120b',
-      endpoint: `${baseUrl}/local-llm`,
+      endpoint: `${baseUrl}/local-llm/v1/chat/completions`,
       pricing: '$0 (on-premise)'
     }
   };

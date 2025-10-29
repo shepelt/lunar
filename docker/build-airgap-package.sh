@@ -91,15 +91,10 @@ docker save -o "$PACKAGE_DIR/alpine-latest.tar" alpine:latest
 echo "📋 Copying configuration files..."
 cp -r "$PROJECT_ROOT/kong" "$PACKAGE_DIR/"
 cp -r "$PROJECT_ROOT/kong-plugins" "$PACKAGE_DIR/"
-cp "$PROJECT_ROOT/.env.example" "$PACKAGE_DIR/.env.example"
 
-# Create .env from .env.example only if it doesn't exist
-if [ ! -f "$PACKAGE_DIR/.env" ]; then
-  echo "  Creating .env from .env.example (first time setup)..."
-  cp "$PROJECT_ROOT/.env.example" "$PACKAGE_DIR/.env"
-else
-  echo "  Preserving existing .env file..."
-fi
+# Copy .env.example (but NOT .env - let deploy script handle that)
+echo "  Copying .env.example..."
+cp "$PROJECT_ROOT/.env.example" "$PACKAGE_DIR/.env.example"
 
 # Create modified docker-compose.yml for air-gap deployment
 echo "📝 Creating air-gap docker-compose.yml..."

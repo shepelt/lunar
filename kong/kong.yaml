@@ -20,9 +20,7 @@ services:
               hide_credentials: false
 
   - name: lunar-backend-admin
-    host: host.docker.internal
-    port: 5872
-    protocol: http
+    url: ${BACKEND_URL}
     routes:
       - name: admin-api
         paths:
@@ -104,7 +102,7 @@ services:
               hide_credentials: false
           - name: lunar-gateway
             config:
-              backend_url: http://host.docker.internal:5872
+              backend_url: ${BACKEND_URL}
           - name: ai-proxy
             config:
               route_type: llm/v1/chat
@@ -124,13 +122,24 @@ services:
     routes:
       - name: ollama-proxy
         paths:
-          - /local-llm
-        strip_path: true
+          - ~/local-llm(/v1/chat/.*)$
+        strip_path: false
         preserve_host: false
         protocols:
           - http
           - https
+        methods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
         plugins:
+          - name: request-transformer
+            config:
+              replace:
+                uri: $(uri_captures[1])
           - name: key-auth
             config:
               key_names:
@@ -145,4 +154,4 @@ services:
                   - X-Kong-LLM-Model:ollama/${OLLAMA_MODEL_NAME}
           - name: lunar-gateway
             config:
-              backend_url: http://host.docker.internal:5872
+              backend_url: ${BACKEND_URL}

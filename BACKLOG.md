@@ -22,6 +22,7 @@
 - TASK-15: Blockchain nonce management - sequential queue to prevent concurrent transaction nonce collisions
 - TASK-16: Consolidated routing for LLM and admin dashboard through Kong (single port exposure via Tailscale funnel)
 - TASK-17: HTTP Basic Auth for admin dashboard and API protection
+- TASK-18: Removed backend port 5872 exposure (backend only accessible via Kong)
 
 ## In Progress
 
