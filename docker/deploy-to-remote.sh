@@ -47,9 +47,15 @@ cat "$PROJECT_ROOT/.env" | \
 
 echo "✅ .env configured for $REMOTE_HOST"
 
-# Transfer .env file (overwrites the one from tarball)
-echo "📤 Transferring configured .env file..."
-scp "$TMP_ENV" "$REMOTE_HOST:~/lunar-airgap-deployment/.env"
+# Transfer .env file only if it doesn't exist on remote
+echo "📤 Checking .env on remote server..."
+if ssh $REMOTE_HOST "[ -f ~/lunar-airgap-deployment/.env ]"; then
+  echo "✅ Preserving existing .env file on remote server"
+  echo "   (To update .env, manually edit it on $REMOTE_HOST or delete it before deploying)"
+else
+  echo "📤 Transferring configured .env file (first time setup)..."
+  scp "$TMP_ENV" "$REMOTE_HOST:~/lunar-airgap-deployment/.env"
+fi
 
 # Clean up temp file
 rm "$TMP_ENV"

@@ -33,6 +33,9 @@ services:
           - http
           - https
         plugins:
+          - name: basic-auth
+            config:
+              hide_credentials: true
           - name: request-transformer
             config:
               replace:
@@ -45,6 +48,10 @@ services:
         protocols:
           - http
           - https
+        plugins:
+          - name: basic-auth
+            config:
+              hide_credentials: true
       - name: landing-page
         paths:
           - /

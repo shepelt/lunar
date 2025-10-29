@@ -93,6 +93,14 @@ cp -r "$PROJECT_ROOT/kong" "$PACKAGE_DIR/"
 cp -r "$PROJECT_ROOT/kong-plugins" "$PACKAGE_DIR/"
 cp "$PROJECT_ROOT/.env.example" "$PACKAGE_DIR/.env.example"
 
+# Create .env from .env.example only if it doesn't exist
+if [ ! -f "$PACKAGE_DIR/.env" ]; then
+  echo "  Creating .env from .env.example (first time setup)..."
+  cp "$PROJECT_ROOT/.env.example" "$PACKAGE_DIR/.env"
+else
+  echo "  Preserving existing .env file..."
+fi
+
 # Create modified docker-compose.yml for air-gap deployment
 echo "📝 Creating air-gap docker-compose.yml..."
 cat docker-compose.yml | \
@@ -145,7 +153,7 @@ echo ""
 echo "✅ All Docker images loaded successfully!"
 echo ""
 echo "📋 Next steps:"
-echo "  1. Configure environment: cp .env.example .env && nano .env"
+echo "  1. Configure environment: nano .env  (or cp .env.example .env if missing)"
 echo "  2. Start services: docker-compose up -d"
 echo "  3. View logs: docker-compose logs -f"
 echo "  4. Access dashboard: http://localhost:5872"
@@ -185,8 +193,8 @@ DEPLOYMENT STEPS:
 1. Load Docker images:
    ./deploy.sh
 
-2. Configure environment:
-   cp .env.example .env
+2. Configure environment (if needed):
+   # .env is auto-created from .env.example on first build
    nano .env
 
    Required configuration:
@@ -240,8 +248,12 @@ echo "  Compressed:   $COMPRESSED_SIZE"
 echo "  Location:     $SCRIPT_DIR/$PACKAGE_FILE"
 echo ""
 echo "🚀 Deploy to remote server:"
-echo "  npm run docker:deploy <hostname>"
-echo "  Example: npm run docker:deploy your-server.example.com"
+echo "  npm run docker:airgap:deploy <hostname>"
+echo "  Example: npm run docker:airgap:deploy your-server.example.com"
+echo ""
+echo "📝 Rebuild package:"
+echo "  npm run docker:airgap:build"
+echo "  npm run docker:airgap:build:no-postgres  (exclude PostgreSQL)"
 echo ""
 echo "Or manually transfer and extract:"
 echo "  scp $PACKAGE_FILE user@server:/tmp/"

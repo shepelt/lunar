@@ -21,10 +21,12 @@
 - TASK-14: Docker containerization (super image) and air-gapped deployment tooling
 - TASK-15: Blockchain nonce management - sequential queue to prevent concurrent transaction nonce collisions
 - TASK-16: Consolidated routing for LLM and admin dashboard through Kong (single port exposure via Tailscale funnel)
+- TASK-17: HTTP Basic Auth for admin dashboard and API protection
 
 ## In Progress
 
 ## Future Ideas
+- IP restriction plugin for admin route separation (Tailscale-only access)
 - Batching for quota logging (reduce DB calls)
 - In-memory caching for quota checks
 - Multi-provider LLM support
