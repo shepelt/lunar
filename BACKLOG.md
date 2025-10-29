@@ -23,6 +23,7 @@
 - TASK-16: Consolidated routing for LLM and admin dashboard through Kong (single port exposure via Tailscale funnel)
 - TASK-17: HTTP Basic Auth for admin dashboard and API protection
 - TASK-18: Removed backend port 5872 exposure (backend only accessible via Kong)
+- TASK-19: Docker-based integration test suite with blockchain support
 
 ## In Progress
 

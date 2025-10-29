@@ -1,0 +1,194 @@
+# Docker Compose configuration for integration tests
+# This creates an isolated test environment that doesn't interfere with dev
+
+services:
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: lunar-test-postgres
+    environment:
+      POSTGRES_USER: kong
+      POSTGRES_PASSWORD: kongpass
+      POSTGRES_DB: kong
+    networks:
+      - lunar-test-network
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "kong"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  test-proxy:
+    image: node:18-alpine
+    container_name: lunar-test-proxy
+    working_dir: /app
+    volumes:
+      - ./tests/test-proxy.js:/app/test-proxy.js:ro
+      - ./package.json:/app/package.json:ro
+      - ./node_modules:/app/node_modules:ro
+    command: node test-proxy.js
+    networks:
+      - lunar-test-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:11435/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "11435:11435"
+
+  kong-migrations-test:
+    image: kong:3.9.1
+    container_name: lunar-test-migrations
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: postgres-test
+      KONG_PG_PORT: 5432
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kongpass
+      KONG_PG_DATABASE: kong
+    command: kong migrations bootstrap
+    networks:
+      - lunar-test-network
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    restart: on-failure
+
+  lunar-super-test:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: lunar-test-super
+    environment:
+      # Kong Database
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: postgres-test
+      KONG_PG_PORT: 5432
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kongpass
+      KONG_PG_DATABASE: kong
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+
+      # Backend Database
+      POSTGRES_HOST: postgres-test
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: kong
+      POSTGRES_USER: kong
+      POSTGRES_PASSWORD: kongpass
+
+      # Internal URLs (no exposed ports, only internal)
+      KONG_ADMIN_URL: http://localhost:8001
+      KONG_GATEWAY_URL: http://localhost:8000
+      BACKEND_URL: http://localhost:5872
+
+      # LLM Providers (using test proxy → mock responses)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-test-key}
+      OPENAI_BASE_URL: http://test-proxy:11435
+      OLLAMA_BACKEND_URL: http://test-proxy:11435
+      OLLAMA_MODEL_NAME: qwen2:0.5b
+
+      # Test endpoint
+      LUNAR_ENDPOINT_URL: http://localhost:8000
+
+      # Blockchain (optional - uses host .env values)
+      BLOCKCHAIN_PRIVATE_KEY: ${BLOCKCHAIN_PRIVATE_KEY:-}
+      BLOCKCHAIN_RPC_URL: ${BLOCKCHAIN_RPC_URL:-}
+      BLOCKCHAIN_CONTRACT_ADDRESS: ${BLOCKCHAIN_CONTRACT_ADDRESS:-}
+      BLOCKCHAIN_BATCH_SIZE: ${BLOCKCHAIN_BATCH_SIZE:-50}
+      BLOCKCHAIN_BATCH_INTERVAL_MS: ${BLOCKCHAIN_BATCH_INTERVAL_MS:-10000}
+      STORE_FULL_REQUEST_RESPONSE: false
+    volumes:
+      - ./kong-plugins:/usr/local/kong/custom-plugins:ro
+      - ./kong/kong.conf:/etc/kong/kong.conf:ro
+    networks:
+      - lunar-test-network
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      kong-migrations-test:
+        condition: service_completed_successfully
+      test-proxy:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "sh", "-c", "kong health && wget -q -O- http://localhost:5872/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  kong-provisioner-test:
+    image: alpine:latest
+    container_name: lunar-test-provisioner
+    volumes:
+      - ./kong/kong.yaml:/kong-template.yaml:ro
+      - ./kong/provision.sh:/provision.sh:ro
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-test-key}
+      OPENAI_BASE_URL: http://test-proxy:11435
+      BACKEND_URL: http://localhost:5872
+      OLLAMA_BACKEND_URL: http://test-proxy:11435
+      OLLAMA_MODEL_NAME: qwen2:0.5b
+      ADMIN_USERNAME: test-admin
+      ADMIN_PASSWORD: test-password-123
+      KONG_ADMIN_URL: http://lunar-super-test:8001
+      DECK_VERSION: v1.41.1
+    command: >
+      sh -c "
+        apk add --no-cache curl gettext jq &&
+        ARCH=$$(uname -m) &&
+        if [ \"$$ARCH\" = \"x86_64\" ]; then ARCH=\"amd64\"; elif [ \"$$ARCH\" = \"aarch64\" ]; then ARCH=\"arm64\"; fi &&
+        curl -sL https://github.com/kong/deck/releases/download/$${DECK_VERSION}/deck_$${DECK_VERSION#v}_linux_$${ARCH}.tar.gz | tar -xz -C /usr/local/bin &&
+        sleep 5 &&
+        /provision.sh
+      "
+    networks:
+      - lunar-test-network
+    depends_on:
+      lunar-super-test:
+        condition: service_healthy
+    restart: on-failure
+
+  test-runner:
+    image: node:18-alpine
+    container_name: lunar-test-runner
+    working_dir: /app
+    volumes:
+      - ./tests:/app/tests:ro
+      - ./src:/app/src:ro
+      - ./contracts:/app/contracts:ro
+      - ./package.json:/app/package.json:ro
+      - ./package-lock.json:/app/package-lock.json:ro
+      - ./node_modules:/app/node_modules:ro
+    environment:
+      # Test from inside Docker network
+      KONG_ADMIN_URL: http://lunar-super-test:8001
+      KONG_GATEWAY_URL: http://lunar-super-test:8000
+      ADMIN_USERNAME: test-admin
+      ADMIN_PASSWORD: test-password-123
+      NODE_OPTIONS: --experimental-vm-modules
+      TEST_INTERNAL: "true"
+      # Ollama configuration (enables LLM tests)
+      OLLAMA_BACKEND_URL: http://test-proxy:11435
+      OLLAMA_MODEL_NAME: qwen2:0.5b
+      # Test proxy endpoint for validation
+      TEST_PROXY_URL: http://test-proxy:11435
+      # Blockchain configuration (optional - from host .env)
+      BLOCKCHAIN_PRIVATE_KEY: ${BLOCKCHAIN_PRIVATE_KEY:-}
+      BLOCKCHAIN_RPC_URL: ${BLOCKCHAIN_RPC_URL:-}
+      BLOCKCHAIN_CONTRACT_ADDRESS: ${BLOCKCHAIN_CONTRACT_ADDRESS:-}
+    networks:
+      - lunar-test-network
+    depends_on:
+      lunar-super-test:
+        condition: service_healthy
+      kong-provisioner-test:
+        condition: service_completed_successfully
+    command: npx jest tests/*.integration.test.js
+
+networks:
+  lunar-test-network:
+    driver: bridge
+    internal: false  # Allow internet access but tests use explicit service names

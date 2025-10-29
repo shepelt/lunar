@@ -19,20 +19,23 @@ deck gateway sync /tmp/kong.yaml --kong-addr="$KONG_ADDR" --skip-consumers
 
 # Create admin consumer for basic-auth (if not exists)
 echo "Setting up admin basic-auth..."
-CONSUMER_ID=$(curl -s -X POST "$KONG_ADDR/consumers" \
-  -H "Content-Type: application/json" \
-  -d "{\"username\": \"lunar-admin\"}" \
-  | grep -o '"id":"[^"]*"' | cut -d'"' -f4 || echo "")
 
-# If consumer creation failed (already exists), get the existing consumer ID
+# Try to create consumer, capture response
+CONSUMER_RESPONSE=$(curl -s -X POST "$KONG_ADDR/consumers" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "lunar-admin"}')
+
+# Extract consumer ID from response (whether newly created or error response)
+CONSUMER_ID=$(echo "$CONSUMER_RESPONSE" | jq -r '.id // empty')
+
+# If consumer creation failed (already exists), fetch the existing one
 if [ -z "$CONSUMER_ID" ]; then
-  CONSUMER_ID=$(curl -s "$KONG_ADDR/consumers/lunar-admin" \
-    | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+  CONSUMER_ID=$(curl -s "$KONG_ADDR/consumers/lunar-admin" | jq -r '.id')
 fi
 
-# Create or update basic-auth credential
-# First, get existing credential ID if it exists (match ,"id":" to get credential ID, not consumer ID)
-EXISTING_CRED_ID=$(curl -s "$KONG_ADDR/consumers/lunar-admin/basic-auth" | grep -o ',"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+# Get existing basic-auth credentials for this consumer
+EXISTING_CREDS=$(curl -s "$KONG_ADDR/consumers/lunar-admin/basic-auth")
+EXISTING_CRED_ID=$(echo "$EXISTING_CREDS" | jq -r '.data[0].id // empty')
 
 # Delete existing credential if found
 if [ -n "$EXISTING_CRED_ID" ]; then
@@ -41,10 +44,15 @@ fi
 
 # Create new credential with current password from environment
 # Use form-encoded data to properly handle special characters in password
-curl -s -X POST "$KONG_ADDR/consumers/lunar-admin/basic-auth" \
+CRED_RESPONSE=$(curl -s -X POST "$KONG_ADDR/consumers/lunar-admin/basic-auth" \
   --data-urlencode "username=$ADMIN_USERNAME" \
-  --data-urlencode "password=$ADMIN_PASSWORD" \
-  > /dev/null 2>&1 \
-  || echo "Warning: Failed to create basic-auth credential"
+  --data-urlencode "password=$ADMIN_PASSWORD")
 
-echo "Admin basic-auth configured for user: $ADMIN_USERNAME"
+# Check if credential creation was successful
+if echo "$CRED_RESPONSE" | jq -e '.id' > /dev/null 2>&1; then
+  echo "Admin basic-auth configured for user: $ADMIN_USERNAME"
+else
+  echo "Error: Failed to create basic-auth credential"
+  echo "$CRED_RESPONSE" | jq '.'
+  exit 1
+fi

@@ -20,6 +20,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   kong-migrations:
     image: kong:3.9.1
@@ -102,6 +103,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   kong-provisioner:
     image: alpine:latest
@@ -121,7 +123,7 @@ services:
       DECK_ARCH: ${DECK_ARCH:-arm64}
     command: >
       sh -c "
-        apk add --no-cache curl gettext &&
+        apk add --no-cache curl gettext jq &&
         curl -sL https://github.com/kong/deck/releases/download/$${DECK_VERSION}/deck_$${DECK_VERSION#v}_linux_$${DECK_ARCH}.tar.gz | tar -xz -C /usr/local/bin &&
         sleep 15 &&
         /provision.sh

@@ -88,6 +88,9 @@ services:
       - "8000:8000"  # Kong Proxy
       - "8001:8001"  # Kong Admin API
     volumes:
+      # Mount src for hot reload during development (comment out for production)
+      - ./src:/app/src:ro
+      - ./public:/app/public:ro
       - ./kong-plugins:/usr/local/kong/custom-plugins:ro
       - ./kong/kong.conf:/etc/kong/kong.conf:ro
     networks:
@@ -120,7 +123,7 @@ services:
       DECK_VERSION: v1.41.1
     command: >
       sh -c "
-        apk add --no-cache curl gettext &&
+        apk add --no-cache curl gettext jq &&
         ARCH=$$(uname -m) &&
         if [ \"$$ARCH\" = \"x86_64\" ]; then ARCH=\"amd64\"; elif [ \"$$ARCH\" = \"aarch64\" ]; then ARCH=\"arm64\"; fi &&
         curl -sL https://github.com/kong/deck/releases/download/$${DECK_VERSION}/deck_$${DECK_VERSION#v}_linux_$${ARCH}.tar.gz | tar -xz -C /usr/local/bin &&
@@ -133,6 +136,34 @@ services:
       lunar-super:
         condition: service_healthy
     restart: on-failure
+
+  test-runner:
+    image: node:18-alpine
+    container_name: lunar-test-runner
+    working_dir: /app
+    volumes:
+      - ./tests:/app/tests:ro
+      - ./package.json:/app/package.json:ro
+      - ./package-lock.json:/app/package-lock.json:ro
+      - ./node_modules:/app/node_modules:ro
+    environment:
+      # Test from inside Docker network
+      KONG_ADMIN_URL: http://lunar-super:8001
+      KONG_GATEWAY_URL: http://lunar-super:8000
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+      NODE_OPTIONS: --experimental-vm-modules
+      TEST_INTERNAL: "true"
+    networks:
+      - lunar-network
+    depends_on:
+      lunar-super:
+        condition: service_healthy
+      kong-provisioner:
+        condition: service_completed_successfully
+    command: npx jest tests/internal.test.js
+    profiles:
+      - test
 
 volumes:
   postgres-data:

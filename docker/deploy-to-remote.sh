@@ -64,20 +64,40 @@ set -e
 
 cd ~/lunar-airgap-deployment
 
+# Detect Docker paths (support both Docker Desktop and Colima)
+if [ -f /opt/homebrew/bin/docker ]; then
+  DOCKER_CMD="/opt/homebrew/bin/docker"
+  DOCKER_COMPOSE_CMD="/opt/homebrew/bin/docker-compose"
+elif [ -f /usr/local/bin/docker ]; then
+  DOCKER_CMD="/usr/local/bin/docker"
+  DOCKER_COMPOSE_CMD="/usr/local/bin/docker-compose"
+elif command -v docker-compose &> /dev/null; then
+  DOCKER_CMD="docker"
+  DOCKER_COMPOSE_CMD="docker-compose"
+elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
+  DOCKER_CMD="docker"
+  DOCKER_COMPOSE_CMD="docker compose"
+else
+  echo "❌ Docker not found!"
+  exit 1
+fi
+
+echo "🐳 Using Docker at: $DOCKER_CMD"
+
 # Stop existing containers
 echo "⏹️  Stopping existing containers..."
-/usr/local/bin/docker-compose down || true
+$DOCKER_COMPOSE_CMD down || true
 
 # Load new images
 echo "📦 Loading updated images..."
-/usr/local/bin/docker load -i lunar-super.tar
-/usr/local/bin/docker load -i kong-3.9.1.tar
+$DOCKER_CMD load -i lunar-super.tar
+$DOCKER_CMD load -i kong-3.9.1.tar
 
 # Start services with architecture detection
 echo "🚀 Starting services..."
 export DECK_ARCH=$(uname -m | sed 's/aarch64/arm64/;s/x86_64/amd64/')
 echo "  Detected architecture: $DECK_ARCH"
-/usr/local/bin/docker-compose up -d
+$DOCKER_COMPOSE_CMD up -d
 
 # Wait a bit for services to initialize
 sleep 10
@@ -85,11 +105,11 @@ sleep 10
 # Check status
 echo ""
 echo "📊 Container status:"
-/usr/local/bin/docker-compose ps
+$DOCKER_COMPOSE_CMD ps
 
 echo ""
 echo "🔍 Recent logs:"
-/usr/local/bin/docker-compose logs --tail=20 lunar-super
+$DOCKER_COMPOSE_CMD logs --tail=20 lunar-super
 
 echo ""
 echo "✅ Deployment complete!"

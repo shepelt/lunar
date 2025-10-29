@@ -14,57 +14,79 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
-import request from 'supertest';
-import app from '../src/app.js';
-import { pool } from '../src/db.js';
 import { initBlockchain } from '../src/blockchain.js';
 import { nanoid } from 'nanoid';
 
-describe('Blockchain Concurrent Request Test', () => {
+// Use environment variables for URLs (supports both local and Docker testing)
+const KONG_ADMIN_URL = process.env.KONG_ADMIN_URL || 'http://localhost:8001';
+const KONG_GATEWAY_URL = process.env.KONG_GATEWAY_URL || 'http://localhost:8000';
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'test-admin';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'test-password-123';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL_NAME || 'qwen2:0.5b';
+
+// Check if blockchain is configured
+const BLOCKCHAIN_CONFIGURED = Boolean(
+  process.env.BLOCKCHAIN_PRIVATE_KEY &&
+  process.env.BLOCKCHAIN_RPC_URL &&
+  process.env.BLOCKCHAIN_CONTRACT_ADDRESS
+);
+
+// Skip all tests if blockchain not configured
+const describeBlockchain = BLOCKCHAIN_CONFIGURED ? describe : describe.skip;
+
+describeBlockchain('Blockchain Concurrent Request Test', () => {
   let testConsumerId;
   let testApiKey;
 
   beforeAll(async () => {
     // Initialize blockchain (required for tests)
-    initBlockchain();
+    const initialized = initBlockchain();
+    if (!initialized) {
+      throw new Error('Blockchain initialization failed - tests require blockchain configuration');
+    }
 
-    // Create test consumer with quota
+    // Create test consumer using Kong Admin API
     const username = `test-blockchain-${nanoid(8)}`;
 
-    const consumerRes = await request(app)
-      .post('/api/admin/consumers')
-      .send({ username, quota: 100 });
+    // Create consumer via Kong Admin API
+    const consumerRes = await fetch(`${KONG_ADMIN_URL}/consumers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username })
+    });
+    const consumer = await consumerRes.json();
+    testConsumerId = consumer.id;
 
-    testConsumerId = consumerRes.body.consumer.id;
-    testApiKey = consumerRes.body.api_key;
+    // Create API key for consumer via Kong Admin API
+    const keyRes = await fetch(`${KONG_ADMIN_URL}/consumers/${testConsumerId}/key-auth`, {
+      method: 'POST'
+    });
+    const key = await keyRes.json();
+    testApiKey = key.key;
+
+    // Set quota for consumer via backend API
+    const credentials = Buffer.from(`${ADMIN_USERNAME}:${ADMIN_PASSWORD}`).toString('base64');
+    await fetch(`${KONG_GATEWAY_URL}/admin/api/consumers/${testConsumerId}/quota`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${credentials}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ quota: 100 })
+    });
   });
 
   afterAll(async () => {
-    // Cleanup: delete test consumer and logs
+    // Cleanup: delete test consumer (cascades to logs and quotas via Kong)
     if (testConsumerId) {
-      await pool.query('DELETE FROM usage_logs WHERE consumer_id = $1', [testConsumerId]);
-      await pool.query('DELETE FROM consumer_quotas WHERE consumer_id = $1', [testConsumerId]);
+      await fetch(`${KONG_ADMIN_URL}/consumers/${testConsumerId}`, {
+        method: 'DELETE'
+      });
     }
-
-    // Close database pool to prevent open handles
-    await pool.end();
   });
 
   test('should handle concurrent requests without nonce conflicts', async () => {
-    // Skip test if blockchain not configured
-    const configRes = await request(app).get('/api/config');
-    if (!configRes.body.blockchain_enabled) {
-      console.log('⚠️  Skipping blockchain test - blockchain not configured');
-      return;
-    }
-
-    // Check if Kong is running
-    try {
-      await fetch('http://localhost:8000/health');
-    } catch (error) {
-      console.log('⚠️  Skipping test - Kong not running on localhost:8000');
-      return;
-    }
+    // Blockchain is confirmed to be configured (checked in describe block)
 
     console.log('\n🔄 Making 5 concurrent LLM requests to Kong...');
     console.log(`   Using API Key: ${testApiKey.substring(0, 8)}...`);
@@ -72,14 +94,14 @@ describe('Blockchain Concurrent Request Test', () => {
     // Make 5 concurrent requests to Kong local-llm endpoint
     const promises = Array.from({ length: 5 }, async (_, i) => {
       try {
-        const response = await fetch('http://localhost:8000/local-llm', {
+        const response = await fetch(`${KONG_GATEWAY_URL}/local-llm/v1/chat/completions`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'apikey': testApiKey
           },
           body: JSON.stringify({
-            model: 'gpt-oss:120b',
+            model: OLLAMA_MODEL,
             messages: [
               { role: 'user', content: `Test message ${i + 1}` }
             ],
@@ -103,17 +125,21 @@ describe('Blockchain Concurrent Request Test', () => {
 
     // Wait for blockchain transactions to process
     console.log('\n⏳ Waiting for blockchain transactions to process...');
-    await new Promise(resolve => setTimeout(resolve, 15000)); // 15 seconds
+    await new Promise(resolve => setTimeout(resolve, 30000)); // 30 seconds (blockchain + DB update)
 
-    // Fetch audit logs
-    const auditRes = await request(app)
-      .get('/api/audit')
-      .query({ limit: 10 });
+    // Fetch audit logs through Kong Gateway with authentication
+    const credentials = Buffer.from(`${ADMIN_USERNAME}:${ADMIN_PASSWORD}`).toString('base64');
+    const auditRes = await fetch(`${KONG_GATEWAY_URL}/admin/api/audit?limit=10`, {
+      headers: {
+        'Authorization': `Basic ${credentials}`
+      }
+    });
 
-    expect(auditRes.status).toBe(200);
+    expect(auditRes.ok).toBe(true);
 
-    // Filter logs for our test consumer (body is the array directly)
-    const testLogs = auditRes.body
+    // Filter logs for our test consumer
+    const allLogs = await auditRes.json();
+    const testLogs = allLogs
       .filter(log => log.consumer_id === testConsumerId)
       .sort((a, b) => a.created_at - b.created_at);
 
@@ -161,22 +187,28 @@ describe('Blockchain Concurrent Request Test', () => {
     } else {
       console.log('\n⚠️  Some transactions still pending - this is normal for blockchain writes');
     }
-  }, 60000); // 60 second timeout for Kong + blockchain operations
+  }, 90000); // 90 second timeout for Kong + blockchain operations
 
   test('should report queue status via config endpoint', async () => {
-    const res = await request(app).get('/api/config');
+    const credentials = Buffer.from(`${ADMIN_USERNAME}:${ADMIN_PASSWORD}`).toString('base64');
+    const res = await fetch(`${KONG_GATEWAY_URL}/admin/api/config`, {
+      headers: {
+        'Authorization': `Basic ${credentials}`
+      }
+    });
 
-    expect(res.status).toBe(200);
+    expect(res.ok).toBe(true);
 
-    if (res.body.blockchain_enabled && res.body.blockchain_stats) {
+    const config = await res.json();
+    if (config.blockchain_enabled && config.blockchain_stats) {
       console.log('\n📊 Blockchain Queue Status:');
-      console.log(`  - Queue length: ${res.body.blockchain_stats.queue?.queueLength || 0}`);
-      console.log(`  - Processing: ${res.body.blockchain_stats.queue?.processing || false}`);
+      console.log(`  - Queue length: ${config.blockchain_stats.queue?.queueLength || 0}`);
+      console.log(`  - Processing: ${config.blockchain_stats.queue?.processing || false}`);
 
       // Queue status should be present
-      expect(res.body.blockchain_stats.queue).toBeDefined();
-      expect(typeof res.body.blockchain_stats.queue.queueLength).toBe('number');
-      expect(typeof res.body.blockchain_stats.queue.processing).toBe('boolean');
+      expect(config.blockchain_stats.queue).toBeDefined();
+      expect(typeof config.blockchain_stats.queue.queueLength).toBe('number');
+      expect(typeof config.blockchain_stats.queue.processing).toBe('boolean');
     }
   });
 });
