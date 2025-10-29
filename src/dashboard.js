@@ -90,15 +90,17 @@ router.get('/consumers', async (req, res) => {
       ORDER BY cq.created_at DESC
     `);
 
-    const consumers = result.rows.map(row => ({
-      id: row.consumer_id,
-      username: row.username,
-      custom_id: row.custom_id,
-      quota: parseFloat(row.quota),
-      used: parseFloat(row.used),
-      requests: row.requests,
-      created_at: row.created_at
-    }));
+    const consumers = result.rows
+      .filter(row => row.username !== 'lunar-admin') // Hide lunar-admin from dashboard
+      .map(row => ({
+        id: row.consumer_id,
+        username: row.username,
+        custom_id: row.custom_id,
+        quota: parseFloat(row.quota),
+        used: parseFloat(row.used),
+        requests: row.requests,
+        created_at: row.created_at
+      }));
 
     res.json(consumers);
   } catch (error) {
@@ -431,6 +433,15 @@ router.delete('/admin/consumers/:consumer_id', async (req, res) => {
   try {
     const { consumer_id } = req.params;
     const kongAdminUrl = process.env.KONG_ADMIN_URL || 'http://localhost:8001';
+
+    // First, check if this is the lunar-admin consumer (protect it from deletion)
+    const consumerResponse = await fetch(`${kongAdminUrl}/consumers/${consumer_id}`);
+    if (consumerResponse.ok) {
+      const consumer = await consumerResponse.json();
+      if (consumer.username === 'lunar-admin') {
+        return res.status(403).json({ error: 'Cannot delete lunar-admin consumer (used for basic auth)' });
+      }
+    }
 
     // Delete from Kong
     const response = await fetch(`${kongAdminUrl}/consumers/${consumer_id}`, {
