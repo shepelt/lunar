@@ -558,6 +558,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const responseContainer = document.getElementById('llm-response-container');
   const errorContainer = document.getElementById('llm-error-container');
 
+  // Load saved API key from localStorage
+  const savedApiKey = localStorage.getItem('lunar_test_api_key');
+  if (savedApiKey) {
+    apiKeyInput.value = savedApiKey;
+  }
+
+  // Save API key to localStorage on change
+  apiKeyInput.addEventListener('input', () => {
+    const apiKey = apiKeyInput.value.trim();
+    if (apiKey) {
+      localStorage.setItem('lunar_test_api_key', apiKey);
+    } else {
+      localStorage.removeItem('lunar_test_api_key');
+    }
+  });
+
   testBtn.addEventListener('click', async () => {
     const apiKey = apiKeyInput.value.trim();
     const prompt = promptInput.value.trim();
