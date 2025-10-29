@@ -654,4 +654,81 @@ router.get('/ai-proxy/status', async (req, res) => {
   }
 });
 
+// Landing page
+router.get('/info', async (req, res) => {
+  const version = process.env.npm_package_version || '0.1.0';
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LunarGW - LLM Gateway</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-gray-900 via-purple-900 to-blue-900 min-h-screen flex items-center justify-center p-6">
+  <div class="max-w-3xl mx-auto bg-black bg-opacity-60 backdrop-blur-lg rounded-2xl shadow-2xl p-10 border border-purple-500">
+    <div class="text-center mb-8">
+      <h1 class="text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400 mb-4">🌙 LunarGW</h1>
+      <p class="text-xl text-gray-300">Language Model Union Network & Audit Relay</p>
+      <p class="text-sm text-gray-500 mt-2">Version ${version}</p>
+    </div>
+
+    <div class="space-y-6 text-gray-300">
+      <div class="bg-gray-800 bg-opacity-50 rounded-lg p-6">
+        <h2 class="text-2xl font-semibold text-purple-400 mb-4">🎯 Available Endpoints</h2>
+        <ul class="space-y-3">
+          <li class="flex items-start">
+            <span class="text-green-400 mr-3">▸</span>
+            <div>
+              <code class="text-blue-300">/admin</code>
+              <span class="text-gray-400 ml-2">- Dashboard & Analytics</span>
+            </div>
+          </li>
+          <li class="flex items-start">
+            <span class="text-green-400 mr-3">▸</span>
+            <div>
+              <code class="text-blue-300">/llm/v1/chat/completions</code>
+              <span class="text-gray-400 ml-2">- OpenAI/GPT-5 API (requires API key)</span>
+            </div>
+          </li>
+          <li class="flex items-start">
+            <span class="text-green-400 mr-3">▸</span>
+            <div>
+              <code class="text-blue-300">/local-llm/v1/chat/completions</code>
+              <span class="text-gray-400 ml-2">- Ollama Local LLM (requires API key)</span>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="bg-gray-800 bg-opacity-50 rounded-lg p-6">
+        <h2 class="text-2xl font-semibold text-purple-400 mb-4">✨ Features</h2>
+        <ul class="space-y-2 text-gray-400">
+          <li>• Multi-provider LLM routing (OpenAI, Ollama)</li>
+          <li>• API key authentication & quota management</li>
+          <li>• Real-time usage tracking & auditing</li>
+          <li>• Cost calculation & billing analytics</li>
+          <li>• Blockchain audit logging (optional)</li>
+        </ul>
+      </div>
+
+      <div class="text-center pt-4">
+        <a href="/admin" class="inline-block px-6 py-3 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white font-semibold rounded-lg shadow-lg transition-all duration-200 transform hover:scale-105">
+          Go to Dashboard →
+        </a>
+      </div>
+    </div>
+
+    <div class="mt-8 pt-6 border-t border-gray-700 text-center text-gray-500 text-sm">
+      Powered by Kong Gateway • Built with Node.js
+    </div>
+  </div>
+</body>
+</html>
+  `;
+  res.setHeader('Content-Type', 'text/html');
+  res.send(html);
+});
+
 export default router;

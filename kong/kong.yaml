@@ -19,6 +19,46 @@ services:
               key_in_query: true
               hide_credentials: false
 
+  - name: lunar-backend-admin
+    host: host.docker.internal
+    port: 5872
+    protocol: http
+    routes:
+      - name: admin-api
+        paths:
+          - ~/admin(/api/.*)$
+        strip_path: false
+        preserve_host: false
+        protocols:
+          - http
+          - https
+        plugins:
+          - name: request-transformer
+            config:
+              replace:
+                uri: $(uri_captures[1])
+      - name: admin-dashboard
+        paths:
+          - /admin
+        strip_path: true
+        preserve_host: false
+        protocols:
+          - http
+          - https
+      - name: landing-page
+        paths:
+          - /
+        strip_path: false
+        preserve_host: false
+        protocols:
+          - http
+          - https
+        plugins:
+          - name: request-transformer
+            config:
+              replace:
+                uri: /api/info
+
   - name: llm-service
     url: http://localhost:32000
     routes:

@@ -58,7 +58,7 @@ function timeAgo(timestamp) {
 // Fetch consumers data
 async function fetchConsumers() {
   try {
-    const response = await fetch('/api/consumers');
+    const response = await fetch('/admin/api/consumers');
     if (!response.ok) throw new Error('Failed to fetch consumers');
     return await response.json();
   } catch (error) {
@@ -70,7 +70,7 @@ async function fetchConsumers() {
 // Fetch requests/audit log
 async function fetchRequests(limit = 25) {
   try {
-    const response = await fetch(`/api/audit?limit=${limit}`);
+    const response = await fetch(`/admin/api/audit?limit=${limit}`);
     if (!response.ok) throw new Error('Failed to fetch requests');
     return await response.json();
   } catch (error) {
@@ -82,7 +82,7 @@ async function fetchRequests(limit = 25) {
 // Fetch config (for Ollama model name, etc.)
 async function fetchConfig() {
   try {
-    const response = await fetch('/api/config');
+    const response = await fetch('/admin/api/config');
     if (!response.ok) throw new Error('Failed to fetch config');
     return await response.json();
   } catch (error) {
@@ -94,7 +94,7 @@ async function fetchConfig() {
 // Fetch provider statistics
 async function fetchProviderStats() {
   try {
-    const response = await fetch('/api/stats/providers');
+    const response = await fetch('/admin/api/stats/providers');
     if (!response.ok) throw new Error('Failed to fetch provider stats');
     return await response.json();
   } catch (error) {
@@ -344,7 +344,7 @@ async function createConsumer(username, customId, quota) {
     const body = { username, quota: parseFloat(quota) };
     if (customId) body.custom_id = customId;
 
-    const response = await fetch('/api/admin/consumers', {
+    const response = await fetch('/admin/api/admin/consumers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -365,7 +365,7 @@ async function createConsumer(username, customId, quota) {
 // Delete consumer
 async function deleteConsumer(consumerId) {
   try {
-    const response = await fetch(`/api/admin/consumers/${consumerId}`, {
+    const response = await fetch(`/admin/api/admin/consumers/${consumerId}`, {
       method: 'DELETE'
     });
 
@@ -527,7 +527,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // LLM Test functionality
 async function testLLM(apiKey, prompt, provider) {
   // Call backend proxy (same origin, no CORS issues)
-  const response = await fetch('/api/llm-proxy', {
+  const response = await fetch('/admin/api/llm-proxy', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'

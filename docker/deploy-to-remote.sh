@@ -94,5 +94,5 @@ echo "✅ Deployment complete!"
 EOF
 
 echo ""
-echo "🌐 Dashboard: http://$REMOTE_HOST:5872"
+echo "🌐 Dashboard: http://$REMOTE_HOST:8000/admin"
 echo "🔌 Kong Gateway: http://$REMOTE_HOST:8000"
