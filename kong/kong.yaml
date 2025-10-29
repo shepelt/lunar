@@ -11,10 +11,23 @@ services:
           - /api
         strip_path: false
         plugins:
+          - name: pre-function
+            config:
+              access:
+                - |
+                  -- Extract Bearer token and set as apikey for key-auth plugin
+                  local auth_header = ngx.var.http_authorization
+                  if auth_header and string.match(auth_header, "^Bearer%s+") then
+                    local bearer_token = string.match(auth_header, "^Bearer%s+(.+)$")
+                    if bearer_token then
+                      ngx.req.set_header("apikey", bearer_token)
+                    end
+                  end
           - name: key-auth
             config:
               key_names:
                 - apikey
+                - Authorization
               key_in_header: true
               key_in_query: true
               hide_credentials: false
@@ -93,10 +106,23 @@ services:
                 - X-Auth-Token
               credentials: true
               max_age: 3600
+          - name: pre-function
+            config:
+              access:
+                - |
+                  -- Extract Bearer token and set as apikey for key-auth plugin
+                  local auth_header = ngx.var.http_authorization
+                  if auth_header and string.match(auth_header, "^Bearer%s+") then
+                    local bearer_token = string.match(auth_header, "^Bearer%s+(.+)$")
+                    if bearer_token then
+                      ngx.req.set_header("apikey", bearer_token)
+                    end
+                  end
           - name: key-auth
             config:
               key_names:
                 - apikey
+                - Authorization
               key_in_header: true
               key_in_query: true
               hide_credentials: false
@@ -136,6 +162,18 @@ services:
           - DELETE
           - OPTIONS
         plugins:
+          - name: pre-function
+            config:
+              access:
+                - |
+                  -- Extract Bearer token and set as apikey for key-auth plugin
+                  local auth_header = ngx.var.http_authorization
+                  if auth_header and string.match(auth_header, "^Bearer%s+") then
+                    local bearer_token = string.match(auth_header, "^Bearer%s+(.+)$")
+                    if bearer_token then
+                      ngx.req.set_header("apikey", bearer_token)
+                    end
+                  end
           - name: request-transformer
             config:
               replace:
@@ -144,6 +182,7 @@ services:
             config:
               key_names:
                 - apikey
+                - Authorization
               key_in_header: true
               key_in_query: true
               hide_credentials: false
