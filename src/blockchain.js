@@ -255,10 +255,33 @@ export async function getBlockchainStats() {
   const totalLogs = await contract.methods.totalLogs().call();
   const version = await contract.methods.version().call();
 
+  // Get wallet balance
+  const balanceWei = await web3.eth.getBalance(account.address);
+  const balanceEth = web3.utils.fromWei(balanceWei, 'ether');
+
+  // Estimate remaining logging capacity
+  // Based on actual transaction data:
+  // - 1 log batch: ~2.5M gas (base overhead)
+  // - 9 log batch: ~5.9M gas
+  // - Estimated cost per additional log: ~420K gas
+  // - Full batch (50 logs): ~2.5M + (49 * 420K) = ~23M gas
+  const baseGasOverhead = 2500000;  // Base transaction overhead
+  const gasPerLog = 420000;          // Gas per additional log
+  const avgGasPerBatch = baseGasOverhead + ((BATCH_SIZE - 1) * gasPerLog);
+
+  const gasPrice = await web3.eth.getGasPrice(); // Get current gas price
+  const costPerBatch = web3.utils.fromWei((BigInt(avgGasPerBatch) * BigInt(gasPrice)).toString(), 'ether');
+
+  const estimatedBatchesRemaining = Math.floor(parseFloat(balanceEth) / parseFloat(costPerBatch));
+  const estimatedLogsRemaining = estimatedBatchesRemaining * BATCH_SIZE;
+
   return {
     totalLogs: totalLogs.toString(),
     version,
     contractAddress: CONTRACT_ADDRESS,
+    walletAddress: account.address,
+    balance: balanceEth,
+    estimatedLogsRemaining,
     network: 'HPP Sepolia',
     queue: blockchainQueue.getStatus()
   };

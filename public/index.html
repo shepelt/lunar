@@ -51,6 +51,43 @@
       </div>
     </div>
 
+    <!-- Blockchain Status -->
+    <div id="blockchain-status" class="bg-white rounded-xl shadow-lg p-6 mb-8 hidden">
+      <h2 class="text-2xl font-bold mb-4 text-gray-800">⛓️ Blockchain Status</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Wallet Info -->
+        <div class="bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg p-4 border border-purple-200">
+          <div class="text-sm text-gray-600 uppercase tracking-wide mb-2">Wallet Address</div>
+          <div class="font-mono text-xs text-gray-800 break-all mb-2" id="wallet-address">-</div>
+          <div class="text-sm text-gray-600 uppercase tracking-wide mb-2 mt-4">Balance</div>
+          <div class="text-2xl font-bold text-brand-dark" id="wallet-balance">-</div>
+          <div class="text-xs text-gray-500 mt-1">
+            ~<span id="estimated-logs-remaining" class="font-semibold text-gray-700">-</span> logs remaining
+          </div>
+        </div>
+
+        <!-- Contract Info -->
+        <div class="bg-gradient-to-br from-green-50 to-teal-50 rounded-lg p-4 border border-green-200">
+          <div class="text-sm text-gray-600 uppercase tracking-wide mb-2">Contract Address</div>
+          <div class="font-mono text-xs text-gray-800 break-all mb-2" id="contract-address">-</div>
+          <div class="text-sm text-gray-600 uppercase tracking-wide mb-2 mt-4">Network</div>
+          <div class="text-lg font-semibold text-gray-800" id="blockchain-network">-</div>
+        </div>
+
+        <!-- Stats Info -->
+        <div class="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-lg p-4 border border-orange-200">
+          <div class="text-sm text-gray-600 uppercase tracking-wide mb-2">Total On-chain Logs</div>
+          <div class="text-3xl font-bold text-brand-dark mb-2" id="total-blockchain-logs">-</div>
+          <div class="text-sm text-gray-600 uppercase tracking-wide mb-2 mt-4">Queue Status</div>
+          <div class="text-sm text-gray-800">
+            <span id="queue-length" class="font-semibold">-</span> pending
+            <span class="text-gray-400">•</span>
+            <span id="queue-status" class="font-semibold">-</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- LLM Test Interface -->
     <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
       <h2 class="text-2xl font-bold mb-4 text-gray-800">💬 Test LLM Inference</h2>

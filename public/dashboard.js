@@ -225,6 +225,43 @@ function renderRequestsTable(requests) {
   }).join('');
 }
 
+// Update blockchain status display
+function updateBlockchainStatus(config) {
+  const blockchainSection = document.getElementById('blockchain-status');
+
+  if (!config.blockchain_enabled || !config.blockchain_stats) {
+    blockchainSection.classList.add('hidden');
+    return;
+  }
+
+  const stats = config.blockchain_stats;
+
+  // Show section
+  blockchainSection.classList.remove('hidden');
+
+  // Update wallet info
+  document.getElementById('wallet-address').textContent = stats.walletAddress || '-';
+  document.getElementById('wallet-balance').textContent = stats.balance
+    ? `${parseFloat(stats.balance).toFixed(4)} ETH`
+    : '-';
+  document.getElementById('estimated-logs-remaining').textContent =
+    stats.estimatedLogsRemaining !== undefined
+      ? formatNumber(stats.estimatedLogsRemaining)
+      : '-';
+
+  // Update contract info
+  document.getElementById('contract-address').textContent = stats.contractAddress || '-';
+  document.getElementById('blockchain-network').textContent = stats.network || '-';
+
+  // Update stats
+  document.getElementById('total-blockchain-logs').textContent = formatNumber(parseInt(stats.totalLogs) || 0);
+
+  // Update queue info
+  const queue = stats.queue || {};
+  document.getElementById('queue-length').textContent = queue.queueLength || 0;
+  document.getElementById('queue-status').textContent = queue.processing ? 'processing' : 'idle';
+}
+
 // Render combined provider info (endpoints + usage stats)
 function renderProvidersCombined(stats, config) {
   const container = document.getElementById('providers-combined');
@@ -336,6 +373,7 @@ async function loadDashboard() {
   renderConsumersTable(consumers);
   renderRequestsTable(requests);
   renderProvidersCombined(providerStats, config);
+  updateBlockchainStatus(config);
 }
 
 // Create consumer
