@@ -79,6 +79,9 @@ services:
 
   - name: llm-service
     url: http://localhost:32000
+    connect_timeout: 1800000  # 30 minutes (1,800,000 ms)
+    write_timeout: 1800000    # 30 minutes
+    read_timeout: 1800000     # 30 minutes
     routes:
       - name: llm-proxy
         paths:
@@ -145,6 +148,9 @@ services:
 
   - name: ollama-service
     url: ${OLLAMA_BACKEND_URL}
+    connect_timeout: 1800000  # 30 minutes (1,800,000 ms)
+    write_timeout: 1800000    # 30 minutes
+    read_timeout: 1800000     # 30 minutes
     routes:
       - name: ollama-proxy
         paths:
