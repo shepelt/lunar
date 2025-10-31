@@ -4,16 +4,16 @@ import { Readable } from 'stream';
 const router = express.Router();
 
 // Apply request transformations based on provider
-function transformRequest(body) {
+function transformRequest(body, provider) {
   const model = body.model || '';
   let modified = false;
 
-  // Detect provider
-  const isOpenAI = model.match(/^gpt/) || model.match(/^o1/) || model === '';
-  const isGPT5OrO1 = model.match(/^gpt-5/) || model.match(/^o1/);
-  const isOllama = !isOpenAI;
+  // Detect provider type
+  const isOpenAI = provider === 'openai';
+  const isOllama = provider === 'ollama';
+  const isGPT5OrO1 = isOpenAI && (model.match(/^gpt-5/) || model.match(/^o1/));
 
-  console.log(`Transform: model=${model}, isOpenAI=${isOpenAI}, isGPT5OrO1=${isGPT5OrO1}, isOllama=${isOllama}`);
+  console.log(`Transform: provider=${provider}, model=${model}, isOpenAI=${isOpenAI}, isGPT5OrO1=${isGPT5OrO1}, isOllama=${isOllama}`);
 
   // 1. Transform max_tokens ↔ max_completion_tokens based on provider
   if (isGPT5OrO1) {
@@ -59,18 +59,34 @@ async function routeToProvider(req, res) {
 
     console.log(`LLM Router: Received request for model: ${model}`);
 
-    // Apply transformations
-    body = transformRequest(body);
+    // Parse provider/model format (e.g., "openai/gpt-4", "anthropic/claude", "ollama/gpt-oss:120b")
+    const providerMatch = model.match(/^(openai|anthropic|ollama)\/(.+)$/);
 
-    // Detect provider from model pattern
+    if (!providerMatch) {
+      return res.status(400).json({
+        error: 'Invalid model format. Use provider/model format (e.g., "openai/gpt-4o", "anthropic/claude-sonnet-4", "ollama/gpt-oss:120b")'
+      });
+    }
+
+    const provider = providerMatch[1];
+    const modelName = providerMatch[2];
+
+    // Strip provider prefix from model name
+    body.model = modelName;
+    console.log(`LLM Router: Provider: ${provider}, Model: ${modelName}`);
+
+    // Apply transformations
+    body = transformRequest(body, provider);
+
+    // Route based on provider
     let internalRoute;
-    if (model.match(/^gpt/) || model.match(/^o1/)) {
+    if (provider === 'openai') {
       internalRoute = 'http://localhost:8000/internal/openai';
       console.log(`LLM Router: Routing to OpenAI`);
-    } else if (model.match(/^claude/)) {
+    } else if (provider === 'anthropic') {
       internalRoute = 'http://localhost:8000/internal/anthropic';
       console.log(`LLM Router: Routing to Anthropic`);
-    } else {
+    } else if (provider === 'ollama') {
       internalRoute = 'http://localhost:8000/internal/ollama';
       console.log(`LLM Router: Routing to Ollama`);
     }

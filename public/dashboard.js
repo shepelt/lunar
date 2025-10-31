@@ -262,41 +262,40 @@ function updateBlockchainStatus(config) {
   document.getElementById('queue-status').textContent = queue.processing ? 'processing' : 'idle';
 }
 
-// Render combined provider info (endpoints + usage stats)
+// Render combined provider info (usage stats only)
 function renderProvidersCombined(stats, config) {
   const container = document.getElementById('providers-combined');
 
-  // Get base URL for endpoints
+  // Update unified endpoint display
   const baseUrl = config.lunar_endpoint_url || 'http://localhost:8000';
+  const unifiedEndpoint = `${baseUrl}/llm/v1/chat/completions`;
+  document.getElementById('unified-endpoint').textContent = unifiedEndpoint;
 
-  // Provider configurations - All use unified endpoint with model-based routing
+  // Provider configurations
   const providers = {
     'openai': {
       icon: '🤖',
       color: 'bg-green-50 border-green-200',
       textColor: 'text-green-700',
-      name: 'OpenAI (Cloud)',
+      name: 'OpenAI',
       description: 'GPT-4, GPT-4o, GPT-5',
-      endpoint: `${baseUrl}/llm/v1/chat/completions`,
       pricing: '$1.25/1M input, $10/1M output'
     },
     'anthropic': {
       icon: '🧠',
       color: 'bg-purple-50 border-purple-200',
       textColor: 'text-purple-700',
-      name: 'Anthropic (Cloud)',
-      description: 'All Claude models (Sonnet, Opus, Haiku)',
-      endpoint: `${baseUrl}/llm/v1/chat/completions`,
+      name: 'Anthropic',
+      description: 'Claude models (Sonnet, Opus, Haiku)',
       pricing: '$3/1M input, $15/1M output'
     },
     'ollama': {
       icon: '🏠',
       color: 'bg-blue-50 border-blue-200',
       textColor: 'text-blue-700',
-      name: 'Ollama (Local)',
+      name: 'Ollama',
       description: config.ollama_model || 'gpt-oss:120b',
-      endpoint: `${baseUrl}/llm/v1/chat/completions`,
-      pricing: '$0 (on-premise)'
+      pricing: 'FREE (on-premise)'
     }
   };
 
@@ -314,51 +313,33 @@ function renderProvidersCombined(stats, config) {
     return `
       <div class="border-2 ${provider.color} rounded-lg p-5 hover:shadow-lg transition-shadow">
         <!-- Header -->
-        <div class="flex items-center justify-between mb-4">
-          <div class="flex items-center gap-3">
-            <span class="text-3xl">${provider.icon}</span>
-            <div>
-              <h3 class="font-bold ${provider.textColor} text-lg">${provider.name}</h3>
-              <span class="text-xs text-gray-500">${provider.description}</span>
-            </div>
+        <div class="flex items-center gap-3 mb-4">
+          <span class="text-4xl">${provider.icon}</span>
+          <div class="flex-1">
+            <h3 class="font-bold ${provider.textColor} text-xl">${provider.name}</h3>
+            <div class="text-xs text-gray-500 mt-1">${provider.description}</div>
+            <div class="text-xs text-gray-600 mt-1">${provider.pricing}</div>
           </div>
-          ${isFree ? '<span class="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">FREE</span>' : ''}
-        </div>
-
-        <!-- Endpoint -->
-        <div class="bg-gray-50 rounded p-3 mb-4">
-          <div class="flex items-center justify-between mb-1">
-            <div class="text-xs text-gray-500">Endpoint:</div>
-            <button
-              onclick="copyToClipboard('${provider.endpoint}', this)"
-              class="text-xs px-2 py-1 bg-white border border-gray-300 rounded hover:bg-gray-100 transition-colors"
-              title="Copy to clipboard"
-            >
-              📋 Copy
-            </button>
-          </div>
-          <div class="font-mono text-xs ${provider.textColor} font-medium break-all">${provider.endpoint}</div>
-          <div class="text-xs text-gray-600 mt-2">${provider.pricing}</div>
         </div>
 
         <!-- Usage Stats -->
         ${hasUsage ? `
-          <div class="border-t border-gray-200 pt-4 space-y-2">
-            <div class="flex justify-between items-center">
-              <span class="text-xs text-gray-600 uppercase tracking-wide">Requests:</span>
-              <span class="font-bold ${provider.textColor}">${formatNumber(stat.requests)}</span>
+          <div class="space-y-3">
+            <div class="bg-white rounded p-3">
+              <div class="text-xs text-gray-500 uppercase">Requests</div>
+              <div class="text-2xl font-bold ${provider.textColor}">${formatNumber(stat.requests)}</div>
             </div>
-            <div class="flex justify-between items-center">
-              <span class="text-xs text-gray-600 uppercase tracking-wide">Tokens:</span>
-              <span class="font-semibold ${provider.textColor}">${formatNumber(stat.total_tokens)}</span>
+            <div class="bg-white rounded p-3">
+              <div class="text-xs text-gray-500 uppercase">Tokens</div>
+              <div class="text-lg font-semibold ${provider.textColor}">${formatNumber(stat.total_tokens)}</div>
             </div>
-            <div class="flex justify-between items-center pt-2 border-t border-gray-100">
-              <span class="text-xs text-gray-600 uppercase tracking-wide font-semibold">Total Cost:</span>
-              <span class="font-bold ${isFree ? 'text-green-600' : 'text-brand-dark'} text-lg">${formatCurrency(stat.cost)}</span>
+            <div class="bg-white rounded p-3 border-2 ${isFree ? 'border-green-200' : 'border-purple-200'}">
+              <div class="text-xs text-gray-500 uppercase">Total Cost</div>
+              <div class="text-2xl font-bold ${isFree ? 'text-green-600' : 'text-brand-dark'}">${formatCurrency(stat.cost)}</div>
             </div>
           </div>
         ` : `
-          <div class="border-t border-gray-200 pt-4">
+          <div class="bg-white rounded p-6">
             <div class="text-center text-gray-400 text-sm italic">No usage yet</div>
           </div>
         `}
@@ -572,7 +553,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // LLM Test functionality
-async function testLLM(apiKey, prompt, provider) {
+async function testLLM(apiKey, prompt, provider, model) {
   // Call backend proxy (same origin, no CORS issues)
   const response = await fetch('/admin/api/llm-proxy', {
     method: 'POST',
@@ -582,7 +563,8 @@ async function testLLM(apiKey, prompt, provider) {
     body: JSON.stringify({
       api_key: apiKey,
       prompt: prompt,
-      provider: provider
+      provider: provider,
+      model: model
       // No max_tokens - let the model respond naturally
     })
   });
@@ -602,8 +584,36 @@ document.addEventListener('DOMContentLoaded', () => {
   const apiKeyInput = document.getElementById('test-api-key');
   const promptInput = document.getElementById('test-prompt');
   const endpointSelect = document.getElementById('test-endpoint-select');
+  const modelInput = document.getElementById('test-model-input');
+  const modelDisplay = document.getElementById('test-model-display');
   const responseContainer = document.getElementById('llm-response-container');
   const errorContainer = document.getElementById('llm-error-container');
+
+  // Default models for each provider
+  const defaultModels = {
+    'openai': 'gpt-5',
+    'anthropic': 'claude-sonnet-4-5-20250929',
+    'ollama': 'gpt-oss:120b'
+  };
+
+  // Update model display
+  function updateModelDisplay() {
+    const provider = endpointSelect.value;
+    const model = modelInput.value.trim() || defaultModels[provider];
+    modelDisplay.textContent = `${provider}/${model}`;
+  }
+
+  // Initialize model input with default
+  modelInput.value = defaultModels[endpointSelect.value];
+  updateModelDisplay();
+
+  // Update display when provider or model changes
+  endpointSelect.addEventListener('change', () => {
+    modelInput.value = defaultModels[endpointSelect.value];
+    updateModelDisplay();
+  });
+
+  modelInput.addEventListener('input', updateModelDisplay);
 
   // Load saved API key from localStorage
   const savedApiKey = localStorage.getItem('lunar_test_api_key');
@@ -624,7 +634,8 @@ document.addEventListener('DOMContentLoaded', () => {
   testBtn.addEventListener('click', async () => {
     const apiKey = apiKeyInput.value.trim();
     const prompt = promptInput.value.trim();
-    const endpoint = endpointSelect.value;
+    const provider = endpointSelect.value;
+    const model = modelInput.value.trim();
 
     // Hide previous results
     responseContainer.classList.add('hidden');
@@ -643,11 +654,17 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    if (!model) {
+      errorContainer.classList.remove('hidden');
+      document.getElementById('llm-error-text').textContent = 'Please enter a model name';
+      return;
+    }
+
     try {
       testBtn.disabled = true;
       testBtn.textContent = 'Sending...';
 
-      const result = await testLLM(apiKey, prompt, endpoint);
+      const result = await testLLM(apiKey, prompt, provider, model);
 
       // Display response
       const message = result.choices[0]?.message?.content || result.choices[0]?.message?.reasoning || 'No response';

@@ -579,12 +579,17 @@ router.post('/llm-proxy', async (req, res) => {
     // All providers now use the unified endpoint with model-based routing
     const endpoint = '/llm/v1/chat/completions';
 
-    // Determine model based on provider (users can override by specifying 'model' param)
-    const modelName = model || (
-      provider === 'ollama' ? process.env.OLLAMA_MODEL_NAME || 'gpt-oss:120b' :
-      provider === 'anthropic' ? 'claude-sonnet-4-5-20250929' :  // Default, can use any Claude model
-      'gpt-5'
-    );
+    // Determine model with provider/model format
+    let modelName;
+    if (model) {
+      // If model is provided, ensure it has provider prefix
+      modelName = model.includes('/') ? model : `${provider}/${model}`;
+    } else {
+      // Use defaults
+      modelName = provider === 'ollama' ? `ollama/${process.env.OLLAMA_MODEL_NAME || 'gpt-oss:120b'}` :
+                  provider === 'anthropic' ? 'anthropic/claude-sonnet-4-5-20250929' :
+                  'openai/gpt-5';
+    }
 
     // Forward request to Kong
     const response = await fetch(`${kongUrl}${endpoint}`, {
