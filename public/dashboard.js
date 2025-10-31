@@ -269,7 +269,7 @@ function renderProvidersCombined(stats, config) {
   // Get base URL for endpoints
   const baseUrl = config.lunar_endpoint_url || 'http://localhost:8000';
 
-  // Provider configurations
+  // Provider configurations - All use unified endpoint with model-based routing
   const providers = {
     'openai': {
       icon: '🤖',
@@ -280,13 +280,22 @@ function renderProvidersCombined(stats, config) {
       endpoint: `${baseUrl}/llm/v1/chat/completions`,
       pricing: '$1.25/1M input, $10/1M output'
     },
+    'anthropic': {
+      icon: '🧠',
+      color: 'bg-purple-50 border-purple-200',
+      textColor: 'text-purple-700',
+      name: 'Anthropic (Cloud)',
+      description: 'All Claude models (Sonnet, Opus, Haiku)',
+      endpoint: `${baseUrl}/llm/v1/chat/completions`,
+      pricing: '$3/1M input, $15/1M output'
+    },
     'ollama': {
       icon: '🏠',
       color: 'bg-blue-50 border-blue-200',
       textColor: 'text-blue-700',
       name: 'Ollama (Local)',
       description: config.ollama_model || 'gpt-oss:120b',
-      endpoint: `${baseUrl}/local-llm/v1/chat/completions`,
+      endpoint: `${baseUrl}/llm/v1/chat/completions`,
       pricing: '$0 (on-premise)'
     }
   };

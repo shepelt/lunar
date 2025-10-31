@@ -87,6 +87,7 @@ services:
 
       # LLM Providers (using test proxy → mock responses)
       OPENAI_API_KEY: ${OPENAI_API_KEY:-test-key}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-test-anthropic-key}
       OPENAI_BASE_URL: http://test-proxy:11435
       OLLAMA_BACKEND_URL: http://test-proxy:11435
       OLLAMA_MODEL_NAME: qwen2:0.5b
@@ -127,6 +128,7 @@ services:
       - ./kong/provision.sh:/provision.sh:ro
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-test-key}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-test-anthropic-key}
       OPENAI_BASE_URL: http://test-proxy:11435
       BACKEND_URL: http://localhost:5872
       OLLAMA_BACKEND_URL: http://test-proxy:11435
@@ -170,6 +172,8 @@ services:
       ADMIN_PASSWORD: test-password-123
       NODE_OPTIONS: --experimental-vm-modules
       TEST_INTERNAL: "true"
+      # LLM Provider API Keys
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-test-key}
       # Ollama configuration (enables LLM tests)
       OLLAMA_BACKEND_URL: http://test-proxy:11435
       OLLAMA_MODEL_NAME: qwen2:0.5b

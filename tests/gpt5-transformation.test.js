@@ -38,7 +38,7 @@ describe('GPT-5 Parameter Transformation', () => {
     // Simulate OpenAI SDK sending max_tokens (standard format)
     const client = new OpenAI({
       apiKey: apiKey,
-      baseURL: 'http://localhost:8000/llm',
+      baseURL: 'http://localhost:8000/llm/v1',  // Use unified endpoint with transformations
       defaultHeaders: {
         'apikey': apiKey
       }
@@ -86,7 +86,7 @@ describe('GPT-5 Parameter Transformation', () => {
     // Test with very small limit to verify transformation preserves values
     const client = new OpenAI({
       apiKey: apiKey,
-      baseURL: 'http://localhost:8000/llm',
+      baseURL: 'http://localhost:8000/llm/v1',  // Use unified endpoint with transformations
       defaultHeaders: {
         'apikey': apiKey
       }

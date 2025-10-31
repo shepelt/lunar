@@ -576,16 +576,15 @@ router.post('/llm-proxy', async (req, res) => {
 
     const kongUrl = process.env.KONG_GATEWAY_URL || 'http://localhost:8000';
 
-    // Map provider to Kong endpoint
-    const endpointMap = {
-      'openai': '/llm/v1/chat/completions',
-      'ollama': '/local-llm/v1/chat/completions'
-    };
+    // All providers now use the unified endpoint with model-based routing
+    const endpoint = '/llm/v1/chat/completions';
 
-    const endpoint = endpointMap[provider] || endpointMap['openai'];
-
-    // Determine model based on provider
-    const modelName = model || (provider === 'ollama' ? process.env.OLLAMA_MODEL_NAME || 'gpt-oss:120b' : 'gpt-5');
+    // Determine model based on provider (users can override by specifying 'model' param)
+    const modelName = model || (
+      provider === 'ollama' ? process.env.OLLAMA_MODEL_NAME || 'gpt-oss:120b' :
+      provider === 'anthropic' ? 'claude-sonnet-4-5-20250929' :  // Default, can use any Claude model
+      'gpt-5'
+    );
 
     // Forward request to Kong
     const response = await fetch(`${kongUrl}${endpoint}`, {
@@ -716,14 +715,15 @@ router.get('/info', async (req, res) => {
             <span class="text-green-400 mr-3">▸</span>
             <div>
               <code class="text-blue-300">/llm/v1/chat/completions</code>
-              <span class="text-gray-400 ml-2">- OpenAI/GPT-5 API (requires API key)</span>
-            </div>
-          </li>
-          <li class="flex items-start">
-            <span class="text-green-400 mr-3">▸</span>
-            <div>
-              <code class="text-blue-300">/local-llm/v1/chat/completions</code>
-              <span class="text-gray-400 ml-2">- Ollama Local LLM (requires API key)</span>
+              <span class="text-gray-400 ml-2">- Unified LLM API (OpenAI, Anthropic, Ollama)</span>
+              <div class="text-xs text-gray-500 mt-1 ml-6">
+                Routes to provider based on model name:
+                <ul class="list-disc ml-4 mt-1">
+                  <li><code>gpt-*</code>, <code>o1-*</code> → OpenAI</li>
+                  <li><code>claude-*</code> → Anthropic</li>
+                  <li>Others → Ollama</li>
+                </ul>
+              </div>
             </div>
           </li>
         </ul>
@@ -732,7 +732,9 @@ router.get('/info', async (req, res) => {
       <div class="bg-gray-800 bg-opacity-50 rounded-lg p-6">
         <h2 class="text-2xl font-semibold text-purple-400 mb-4">✨ Features</h2>
         <ul class="space-y-2 text-gray-400">
-          <li>• Multi-provider LLM routing (OpenAI, Ollama)</li>
+          <li>• Multi-provider LLM routing (OpenAI, Anthropic, Ollama)</li>
+          <li>• Unified OpenAI-compatible API endpoint</li>
+          <li>• Model-based automatic provider selection</li>
           <li>• API key authentication & quota management</li>
           <li>• Real-time usage tracking & auditing</li>
           <li>• Cost calculation & billing analytics</li>

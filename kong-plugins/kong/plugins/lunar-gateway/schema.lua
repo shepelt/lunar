@@ -9,6 +9,7 @@ return {
         type = "record",
         fields = {
           { backend_url = { type = "string", required = true }, },
+          { enable_routing = { type = "boolean", default = false }, },
         },
       },
     },

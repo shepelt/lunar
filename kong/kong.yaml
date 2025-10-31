@@ -77,16 +77,121 @@ services:
               replace:
                 uri: /api/info
 
-  - name: llm-service
-    url: http://localhost:32000
-    connect_timeout: 1800000  # 30 minutes (1,800,000 ms)
-    write_timeout: 1800000    # 30 minutes
-    read_timeout: 1800000     # 30 minutes
+  # Legacy /llm endpoint removed - use /llm/v1/chat/completions instead
+
+  # Legacy /local-llm endpoint removed - use /llm/v1/chat/completions instead
+
+  # ============================================================================
+  # UNIFIED LLM GATEWAY - OpenRouter-style single endpoint
+  # ============================================================================
+
+  # Internal routes (not directly accessible) - used by lunar-gateway for routing
+  - name: openai-internal
+    url: http://localhost:32000  # ai-proxy will override this
+    connect_timeout: 1800000
+    write_timeout: 1800000
+    read_timeout: 1800000
     routes:
-      - name: llm-proxy
+      - name: internal-openai
         paths:
-          - /llm
+          - /internal/openai
         strip_path: true
+        preserve_host: false
+        protocols:
+          - http
+        plugins:
+          - name: ip-restriction
+            config:
+              allow:
+                - 127.0.0.1
+                - ::1
+                - 172.16.0.0/12  # Docker networks
+                - 192.168.0.0/16  # Private networks
+          - name: ai-proxy
+            config:
+              route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: "Bearer ${OPENAI_API_KEY}"
+              model:
+                provider: openai
+                options:
+                  temperature: 1.0
+                  max_tokens: null
+              max_request_body_size: 1048576
+
+  - name: anthropic-internal
+    url: http://localhost:32001  # ai-proxy will override this
+    connect_timeout: 1800000
+    write_timeout: 1800000
+    read_timeout: 1800000
+    routes:
+      - name: internal-anthropic
+        paths:
+          - /internal/anthropic
+        strip_path: true
+        preserve_host: false
+        protocols:
+          - http
+        plugins:
+          - name: ip-restriction
+            config:
+              allow:
+                - 127.0.0.1
+                - ::1
+                - 172.16.0.0/12  # Docker networks
+                - 192.168.0.0/16  # Private networks
+          - name: ai-proxy
+            config:
+              route_type: llm/v1/chat
+              auth:
+                header_name: x-api-key
+                header_value: "${ANTHROPIC_API_KEY}"
+              model:
+                provider: anthropic
+                options:
+                  max_tokens: 1024
+                  anthropic_version: "2023-06-01"
+              max_request_body_size: 1048576
+
+  - name: ollama-internal
+    url: ${OLLAMA_BACKEND_URL}/v1/chat/completions
+    connect_timeout: 1800000
+    write_timeout: 1800000
+    read_timeout: 1800000
+    routes:
+      - name: internal-ollama
+        paths:
+          - /internal/ollama
+        strip_path: true
+        preserve_host: false
+        protocols:
+          - http
+        plugins:
+          - name: ip-restriction
+            config:
+              allow:
+                - 127.0.0.1
+                - ::1
+                - 172.16.0.0/12  # Docker networks
+                - 192.168.0.0/16  # Private networks
+          - name: response-transformer
+            config:
+              add:
+                headers:
+                  - X-Kong-LLM-Model:ollama/${OLLAMA_MODEL_NAME}
+
+  # Public unified endpoint - routes to backend for smart routing
+  - name: llm-unified-gateway
+    url: ${BACKEND_URL}  # Backend Express server
+    connect_timeout: 1800000
+    write_timeout: 1800000
+    read_timeout: 1800000
+    routes:
+      - name: llm-unified
+        paths:
+          - /llm/v1/chat/completions
+        strip_path: false
         preserve_host: false
         protocols:
           - http
@@ -132,71 +237,4 @@ services:
           - name: lunar-gateway
             config:
               backend_url: ${BACKEND_URL}
-          - name: ai-proxy
-            config:
-              route_type: llm/v1/chat
-              auth:
-                header_name: Authorization
-                header_value: "Bearer ${OPENAI_API_KEY}"
-              model:
-                provider: openai
-                name: gpt-5
-                options:
-                  temperature: 1.0
-                  max_tokens: null  # Kong 3.9.1+ treats null correctly (no limit)
-              max_request_body_size: 1048576  # 1MB limit for large requests (Dyad sends full codebase)
-
-  - name: ollama-service
-    url: ${OLLAMA_BACKEND_URL}
-    connect_timeout: 1800000  # 30 minutes (1,800,000 ms)
-    write_timeout: 1800000    # 30 minutes
-    read_timeout: 1800000     # 30 minutes
-    routes:
-      - name: ollama-proxy
-        paths:
-          - ~/local-llm(/v1/chat/.*)$
-        strip_path: false
-        preserve_host: false
-        protocols:
-          - http
-          - https
-        methods:
-          - GET
-          - POST
-          - PUT
-          - PATCH
-          - DELETE
-          - OPTIONS
-        plugins:
-          - name: pre-function
-            config:
-              access:
-                - |
-                  -- Extract Bearer token and set as apikey for key-auth plugin
-                  local auth_header = ngx.var.http_authorization
-                  if auth_header and string.match(auth_header, "^Bearer%s+") then
-                    local bearer_token = string.match(auth_header, "^Bearer%s+(.+)$")
-                    if bearer_token then
-                      ngx.req.set_header("apikey", bearer_token)
-                    end
-                  end
-          - name: request-transformer
-            config:
-              replace:
-                uri: $(uri_captures[1])
-          - name: key-auth
-            config:
-              key_names:
-                - apikey
-                - Authorization
-              key_in_header: true
-              key_in_query: true
-              hide_credentials: false
-          - name: response-transformer
-            config:
-              add:
-                headers:
-                  - X-Kong-LLM-Model:ollama/${OLLAMA_MODEL_NAME}
-          - name: lunar-gateway
-            config:
-              backend_url: ${BACKEND_URL}
+              enable_routing: false  # Routing handled by backend

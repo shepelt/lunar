@@ -36,30 +36,9 @@ local function call_backend_sync(method, url, body)
   return data, nil
 end
 
--- Rewrite phase: Modify request body before other plugins read it
+-- Rewrite phase: No longer used (transformations moved to backend)
 function LunarGatewayHandler:rewrite(conf)
-
-  -- Try to get body from memory first
-  local request_body, err = kong.request.get_raw_body()
-
-  if request_body then
-    local body_json, decode_err = cjson.decode(request_body)
-
-    if body_json then
-      local model = body_json.model or ""
-      local is_gpt5_or_o1 = model:match("^gpt%-5") or model:match("^gpt%-5%-") or model:match("^o1")
-
-      -- Transform max_tokens → max_completion_tokens for GPT-5/o1
-      if is_gpt5_or_o1 and body_json.max_tokens and not body_json.max_completion_tokens then
-        body_json.max_completion_tokens = body_json.max_tokens
-        body_json.max_tokens = nil
-
-        local new_body = cjson.encode(body_json)
-        ngx.req.read_body()
-        ngx.req.set_body_data(new_body)
-      end
-    end
-  end
+  -- Transformations now handled by Express backend (src/llm-router.js)
 end
 
 -- Access phase: Check quota before allowing request
@@ -105,66 +84,8 @@ function LunarGatewayHandler:access(conf)
     end
   end
 
-  -- Modify request body for provider compatibility
-  if request_body then
-    local body_json, decode_err = cjson.decode(request_body)
-
-    if body_json then
-      local modified = false
-
-      -- Detect provider from model name or default to OpenAI
-      local model = body_json.model or ""
-      local is_openai = model:match("^gpt") or model:match("^o1") or model == ""
-      local is_gpt5_or_o1 = model:match("^gpt%-5") or model:match("^gpt%-5%-") or model:match("^o1")
-      local is_ollama = not is_openai  -- Non-OpenAI models are Ollama
-
-      -- Transform max_tokens ↔ max_completion_tokens based on provider
-      -- Accept both parameters, transform to what provider expects
-      if is_gpt5_or_o1 then
-        -- GPT-5/o1 models: Use max_completion_tokens
-        if body_json.max_tokens and not body_json.max_completion_tokens then
-          body_json.max_completion_tokens = body_json.max_tokens
-          body_json.max_tokens = nil
-          modified = true
-        end
-      elseif is_ollama then
-        -- Ollama models: Use max_tokens
-        if body_json.max_completion_tokens and not body_json.max_tokens then
-          body_json.max_tokens = body_json.max_completion_tokens
-          body_json.max_completion_tokens = nil
-          modified = true
-          kong.log.info("Transformed max_completion_tokens → max_tokens for Ollama model: ", model)
-        end
-      end
-      -- GPT-4 and older OpenAI models: Keep max_tokens as-is (no transformation needed)
-
-      -- Add stream_options for usage tracking (OpenAI streaming only)
-      if body_json.stream and is_openai and not body_json.stream_options then
-        body_json.stream_options = {
-          include_usage = true
-        }
-        modified = true
-        kong.log.info("Added stream_options for OpenAI model: ", model)
-      end
-
-      -- Apply modifications if any were made
-      if modified then
-        local new_body = cjson.encode(body_json)
-
-        -- Update the request body so other plugins see the modification
-        ngx.req.read_body()
-        ngx.req.set_body_data(new_body)
-
-        -- Also update for the upstream service
-        kong.service.request.set_raw_body(new_body)
-        kong.service.request.set_header("Content-Length", string.len(new_body))
-
-        -- Store in context
-        kong.ctx.plugin.request_body = new_body
-      else
-      end
-    end
-  end
+  -- Request body transformations now handled by Express backend (src/llm-router.js)
+  -- This plugin now only handles quota checking and audit logging
 
   -- Get consumer information
   local consumer = kong.client.get_consumer()
@@ -184,17 +105,64 @@ function LunarGatewayHandler:access(conf)
 
   if err then
     kong.log.warn("Lunar Gateway: Failed to check quota: ", err)
-    -- Fail open: allow request if backend is unavailable
-    return
-  end
-
-  -- Check if consumer has sufficient quota
-  if not quota_data.allowed then
+    -- Fail open: allow request if backend is unavailable (continue processing)
+  elseif quota_data and not quota_data.allowed then
+    -- Check if consumer has sufficient quota (only if we got valid quota_data)
     return kong.response.exit(429, {
       message = "Quota exceeded",
       remaining = quota_data.remaining or 0,
       quota = quota_data.quota or 0
     })
+  end
+
+  -- Model-based routing (if enabled)
+  kong.log.info("Lunar Gateway: enable_routing=", conf.enable_routing, " has_body=", request_body ~= nil)
+
+  if conf.enable_routing then
+    kong.log.info("Lunar Gateway: Routing enabled, checking body")
+
+    if not request_body then
+      kong.log.warn("Lunar Gateway: No request body available for routing")
+      return
+    end
+
+    local body_json, decode_err = cjson.decode(request_body)
+
+    if not body_json then
+      kong.log.warn("Lunar Gateway: Failed to decode body: ", decode_err or "unknown")
+      return
+    end
+
+    kong.log.info("Lunar Gateway: Body decoded, model=", body_json.model or "nil")
+
+    if body_json.model then
+      local model = body_json.model
+      local target_route = nil
+
+      -- Detect provider from model pattern
+      if model:match("^gpt") or model:match("^o1") then
+        target_route = "/internal/openai"
+        kong.log.info("Lunar Gateway: Routing model '", model, "' to OpenAI")
+      elseif model:match("^claude") then
+        target_route = "/internal/anthropic"
+        kong.log.info("Lunar Gateway: Routing model '", model, "' to Anthropic")
+      else
+        target_route = "/internal/ollama"
+        kong.log.info("Lunar Gateway: Routing model '", model, "' to Ollama")
+      end
+
+      -- Internal redirect to the target route
+      if target_route then
+        kong.log.info("Lunar Gateway: Executing internal redirect to: ", target_route)
+
+        -- Re-set the request body to ensure it's available in the subrequest
+        ngx.req.set_body_data(request_body)
+
+        return ngx.exec(target_route)
+      end
+    else
+      kong.log.warn("Lunar Gateway: No model field in request body")
+    end
   end
 end
 

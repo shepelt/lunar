@@ -4,6 +4,7 @@ import { dirname, join } from 'path';
 import { pool } from './db.js';
 import backendRouter from './backend.js';
 import dashboardRouter from './dashboard.js';
+import llmRouter from './llm-router.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -58,6 +59,7 @@ app.use('/api', async (req, res, next) => {
 // Mount routers
 app.use('/api', backendRouter);  // Kong plugin routes
 app.use('/api', dashboardRouter);  // Dashboard/admin routes
+app.use('/llm', llmRouter);  // Unified LLM gateway + legacy /llm endpoint
 
 // Helper function for testing - clear storage
 export async function clearStorage() {

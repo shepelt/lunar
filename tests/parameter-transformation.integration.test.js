@@ -162,7 +162,7 @@ describe('Parameter Transformation through Lunar Gateway', () => {
 
       const client = new OpenAI({
         apiKey: apiKey,
-        baseURL: `${KONG_GATEWAY_URL}/local-llm/v1`,
+        baseURL: `${KONG_GATEWAY_URL}/llm/v1`,  // Use unified endpoint
         defaultHeaders: {
           'apikey': apiKey
         }
@@ -171,7 +171,7 @@ describe('Parameter Transformation through Lunar Gateway', () => {
       const response = await client.chat.completions.create({
         model: OLLAMA_MODEL,
         messages: [{ role: 'user', content: 'Say hello' }],
-        max_tokens: 10  // Plugin should pass through (native Ollama format)
+        max_tokens: 10  // Backend router should pass through (native Ollama format)
       });
 
       expect(response.choices[0].message).toBeDefined();
@@ -192,7 +192,7 @@ describe('Parameter Transformation through Lunar Gateway', () => {
       // Clear proxy requests before test
       await clearProxyRequests();
 
-      const response = await fetch(`${KONG_GATEWAY_URL}/local-llm/v1/chat/completions`, {
+      const response = await fetch(`${KONG_GATEWAY_URL}/llm/v1/chat/completions`, {  // Use unified endpoint
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -201,7 +201,7 @@ describe('Parameter Transformation through Lunar Gateway', () => {
         body: JSON.stringify({
           model: OLLAMA_MODEL,
           messages: [{ role: 'user', content: 'Say hello' }],
-          max_completion_tokens: 10  // Plugin should transform to max_tokens
+          max_completion_tokens: 10  // Backend router should transform to max_tokens
         })
       });
 

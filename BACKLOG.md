@@ -27,6 +27,10 @@
 
 ## In Progress
 
+
+## Fix Me
+- Upstream error handling (timeout, etc)
+
 ## Future Ideas
 - IP restriction plugin for admin route separation (Tailscale-only access)
 - Batching for quota logging (reduce DB calls)
