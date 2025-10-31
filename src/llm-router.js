@@ -132,8 +132,13 @@ router.post('/', async (req, res) => {
     });
 
     res.status(response.status);
+
+    // Forward response headers (exclude encoding-related headers to avoid conflicts)
+    const headersToSkip = ['content-encoding', 'transfer-encoding', 'content-length'];
     response.headers.forEach((value, key) => {
-      res.setHeader(key, value);
+      if (!headersToSkip.includes(key.toLowerCase())) {
+        res.setHeader(key, value);
+      }
     });
 
     const nodeStream = Readable.fromWeb(response.body);
