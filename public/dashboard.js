@@ -677,7 +677,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Calculate cost based on provider
       let cost = 0;
-      if (endpoint === 'ollama') {
+      if (provider === 'ollama') {
         cost = 0; // Local inference is free
       } else {
         // GPT-5 pricing
