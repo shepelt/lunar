@@ -46,6 +46,7 @@
     "node-fetch": "^3.3.2",
     "openai": "^6.7.0",
     "pg": "^8.11.3",
+    "tokenx": "^1.2.0",
     "web3": "^4.16.0"
   },
   "devDependencies": {

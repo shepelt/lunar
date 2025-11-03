@@ -231,6 +231,39 @@ Access via: `http://localhost:8000/local-llm`
 **Ollama Setup:**
 See [Ollama docs](https://ollama.com) for installation. Ensure Ollama listens on `0.0.0.0:11434` (not just localhost) for remote access.
 
+**⚠️ Important: Context Window Configuration**
+
+By default, Ollama uses only 2048 tokens of context, even if your model supports much larger windows (e.g., 131K tokens). To use the full context capability:
+
+1. **Check your model's context capability:**
+   ```bash
+   curl -s http://localhost:11434/api/show -d '{"name": "your-model"}' | grep context_length
+   ```
+
+2. **Update the Modelfile to set `num_ctx`:**
+   ```bash
+   # Export current Modelfile
+   ollama show your-model --modelfile > /tmp/model.Modelfile
+
+   # Edit the file and add (or update) the PARAMETER line:
+   # PARAMETER num_ctx 131072
+
+   # Recreate the model with updated context
+   ollama create your-model -f /tmp/model.Modelfile
+   ```
+
+3. **Verify the change:**
+   ```bash
+   ollama show your-model --modelfile | grep num_ctx
+   # Should output: PARAMETER num_ctx 131072
+   ```
+
+Without this configuration, requests with large contexts will be silently truncated to the first 2048 tokens, which can cause:
+- Loss of system prompts and instructions
+- Truncated codebase context for code generation
+- Incomplete document processing
+- No error messages (silent failure)
+
 ## Testing
 
 ```bash

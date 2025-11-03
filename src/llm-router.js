@@ -1,7 +1,86 @@
 import express from 'express';
 import { Readable } from 'stream';
+import { estimateTokenCount } from 'tokenx';
 
 const router = express.Router();
+
+// Cache for model context limits (Hybrid Cache - Option 4)
+const modelContextCache = new Map();
+
+// Get context limit for a model (query once, cache results)
+async function getContextLimit(modelName, provider) {
+  // Only applicable for Ollama
+  if (provider !== 'ollama') {
+    return null; // OpenAI/Anthropic handle their own limits
+  }
+
+  const cacheKey = modelName;
+
+  // Check cache first
+  if (modelContextCache.has(cacheKey)) {
+    return modelContextCache.get(cacheKey);
+  }
+
+  // Query Ollama /api/show endpoint
+  try {
+    const ollamaUrl = process.env.OLLAMA_BACKEND_URL || 'http://macserver.tailcdff5e.ts.net:11434';
+    const response = await fetch(`${ollamaUrl}/api/show`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: modelName })
+    });
+
+    if (!response.ok) {
+      console.warn(`Failed to query Ollama model info for ${modelName}: ${response.status}`);
+      return 131072; // fallback to common max
+    }
+
+    const info = await response.json();
+
+    // Extract context_length from model_info
+    // Format: model_info["modelname.context_length"]
+    const modelBaseName = modelName.split(':')[0];
+    const contextLength = info.model_info?.[`${modelBaseName}.context_length`] || 131072;
+
+    console.log(`Context limit for ${modelName}: ${contextLength} tokens (cached)`);
+
+    // Cache the result
+    modelContextCache.set(cacheKey, contextLength);
+    return contextLength;
+
+  } catch (error) {
+    console.error(`Error fetching context limit for ${modelName}:`, error);
+    return 131072; // fallback
+  }
+}
+
+// Estimate token count for a request
+function estimateRequestTokens(body) {
+  let totalText = '';
+
+  // Accumulate all message content
+  if (body.messages && Array.isArray(body.messages)) {
+    for (const msg of body.messages) {
+      if (msg.content) {
+        if (typeof msg.content === 'string') {
+          totalText += msg.content + ' ';
+        } else if (Array.isArray(msg.content)) {
+          // Handle content array (multimodal)
+          for (const part of msg.content) {
+            if (part.type === 'text' && part.text) {
+              totalText += part.text + ' ';
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Use tokenx for estimation (94% accurate)
+  const estimated = estimateTokenCount(totalText);
+  console.log(`Token estimation: ~${estimated} tokens for ${totalText.length} characters`);
+  return estimated;
+}
 
 // Apply request transformations based on provider
 function transformRequest(body, provider) {
@@ -74,6 +153,26 @@ async function routeToProvider(req, res) {
     // Strip provider prefix from model name
     body.model = modelName;
     console.log(`LLM Router: Provider: ${provider}, Model: ${modelName}`);
+
+    // Token validation (Ollama only - OpenAI/Anthropic handle their own limits)
+    if (provider === 'ollama') {
+      const estimatedTokens = estimateRequestTokens(body);
+      const contextLimit = await getContextLimit(modelName, provider);
+
+      if (contextLimit && estimatedTokens > contextLimit) {
+        console.warn(`Token limit exceeded: ${estimatedTokens} > ${contextLimit} for model ${modelName}`);
+        return res.status(400).json({
+          error: {
+            message: `This model's maximum context length is ${contextLimit} tokens. However, your messages resulted in approximately ${estimatedTokens} tokens. Please reduce the length of the messages.`,
+            type: 'invalid_request_error',
+            param: 'messages',
+            code: 'context_length_exceeded'
+          }
+        });
+      }
+
+      console.log(`Token validation passed: ${estimatedTokens} <= ${contextLimit}`);
+    }
 
     // Apply transformations
     body = transformRequest(body, provider);
