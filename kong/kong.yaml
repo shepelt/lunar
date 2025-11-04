@@ -150,7 +150,7 @@ services:
               model:
                 provider: anthropic
                 options:
-                  max_tokens: 1024
+                  max_tokens: null
                   anthropic_version: "2023-06-01"
               max_request_body_size: 1048576
 
