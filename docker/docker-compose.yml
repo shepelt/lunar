@@ -105,6 +105,8 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    tmpfs:
+      - /usr/local/kong/sockets:mode=1777
 
   kong-provisioner:
     image: alpine:latest
