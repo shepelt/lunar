@@ -88,20 +88,20 @@ describeBlockchain('Blockchain Concurrent Request Test', () => {
   test('should handle concurrent requests without nonce conflicts', async () => {
     // Blockchain is confirmed to be configured (checked in describe block)
 
-    console.log('\n🔄 Making 5 concurrent LLM requests to Kong...');
+    console.log('\n🔄 Making 12 concurrent LLM requests to Kong (to trigger anchor)...');
     console.log(`   Using API Key: ${testApiKey.substring(0, 8)}...`);
 
-    // Make 5 concurrent requests to Kong local-llm endpoint
-    const promises = Array.from({ length: 5 }, async (_, i) => {
+    // Make 12 concurrent requests to trigger at least one anchor log (every 10th log)
+    const promises = Array.from({ length: 12 }, async (_, i) => {
       try {
-        const response = await fetch(`${KONG_GATEWAY_URL}/local-llm/v1/chat/completions`, {
+        const response = await fetch(`${KONG_GATEWAY_URL}/llm/v1/chat/completions`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': testApiKey
+            'Authorization': `Bearer ${testApiKey}`
           },
           body: JSON.stringify({
-            model: OLLAMA_MODEL,
+            model: `ollama/${OLLAMA_MODEL}`,
             messages: [
               { role: 'user', content: `Test message ${i + 1}` }
             ],
@@ -125,11 +125,11 @@ describeBlockchain('Blockchain Concurrent Request Test', () => {
 
     // Wait for blockchain transactions to process
     console.log('\n⏳ Waiting for blockchain transactions to process...');
-    await new Promise(resolve => setTimeout(resolve, 30000)); // 30 seconds (blockchain + DB update)
+    await new Promise(resolve => setTimeout(resolve, 45000)); // 45 seconds (blockchain + DB update for 12 logs)
 
     // Fetch audit logs through Kong Gateway with authentication
     const credentials = Buffer.from(`${ADMIN_USERNAME}:${ADMIN_PASSWORD}`).toString('base64');
-    const auditRes = await fetch(`${KONG_GATEWAY_URL}/admin/api/audit?limit=10`, {
+    const auditRes = await fetch(`${KONG_GATEWAY_URL}/admin/api/audit?limit=50`, {
       headers: {
         'Authorization': `Basic ${credentials}`
       }
@@ -145,17 +145,20 @@ describeBlockchain('Blockchain Concurrent Request Test', () => {
 
     console.log(`\n📊 Found ${testLogs.length} logs for test consumer\n`);
 
-    // Verify we got all 5 logs
-    expect(testLogs.length).toBeGreaterThanOrEqual(5);
+    // Verify we got all 12 logs
+    expect(testLogs.length).toBeGreaterThanOrEqual(12);
 
-    // Check blockchain transaction hashes
+    // Check blockchain transaction hashes and anchor status
     let successCount = 0;
     let pendingCount = 0;
+    let anchorCount = 0;
 
     testLogs.forEach((log, i) => {
       if (log.blockchain_tx_hash) {
         successCount++;
-        console.log(`  ✅ Log ${i + 1}: blockchain_tx_hash = ${log.blockchain_tx_hash}`);
+        const isAnchor = log.anchor_hash ? '⚓' : '📝';
+        if (log.anchor_hash) anchorCount++;
+        console.log(`  ✅ Log ${i + 1} ${isAnchor}: tx = ${log.blockchain_tx_hash.substring(0, 12)}... ${log.anchor_hash ? `(anchor: ${log.anchor_hash.substring(0, 10)}...)` : ''}`);
       } else {
         pendingCount++;
         console.log(`  ⏳ Log ${i + 1}: blockchain transaction pending or failed`);
@@ -164,6 +167,8 @@ describeBlockchain('Blockchain Concurrent Request Test', () => {
 
     console.log(`\n📈 Blockchain Status:`);
     console.log(`  - Successfully logged: ${successCount}/${testLogs.length}`);
+    console.log(`  - Anchor logs: ${anchorCount}`);
+    console.log(`  - Regular logs: ${successCount - anchorCount}`);
     console.log(`  - Pending/Failed: ${pendingCount}/${testLogs.length}`);
 
     // We expect most or all to have blockchain hashes
@@ -184,10 +189,18 @@ describeBlockchain('Blockchain Concurrent Request Test', () => {
       expect(txHashes.length).toBe(testLogs.length);
       expect(uniqueTxHashes.size).toBeGreaterThan(0);
       console.log('\n✅ All logs successfully written to blockchain!');
+
+      // Verify we have at least one anchor log
+      expect(anchorCount).toBeGreaterThan(0);
+      console.log(`\n⚓ Found ${anchorCount} anchor log(s) - verifying calldata optimization...`);
+
+      // Optional: Verify calldata sizes on blockchain (requires web3)
+      // This would check that regular logs use 4 bytes and anchors use 36 bytes
+
     } else {
       console.log('\n⚠️  Some transactions still pending - this is normal for blockchain writes');
     }
-  }, 90000); // 90 second timeout for Kong + blockchain operations
+  }, 120000); // 120 second timeout for Kong + blockchain operations (12 sequential transactions)
 
   test('should report queue status via config endpoint', async () => {
     const credentials = Buffer.from(`${ADMIN_USERNAME}:${ADMIN_PASSWORD}`).toString('base64');

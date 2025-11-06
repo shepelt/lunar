@@ -24,6 +24,55 @@ let contract;
 let account;
 
 /**
+ * Sequential transaction queue to prevent nonce collisions
+ * Processes blockchain transactions one at a time
+ */
+class TransactionQueue {
+  constructor() {
+    this.queue = [];
+    this.processing = false;
+  }
+
+  /**
+   * Add a transaction to the queue
+   * @param {Function} txFunction - Async function that executes the transaction
+   * @returns {Promise} Resolves when transaction is complete
+   */
+  async add(txFunction) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ txFunction, resolve, reject });
+      this.process();
+    });
+  }
+
+  /**
+   * Process the queue sequentially
+   */
+  async process() {
+    // Already processing or queue is empty
+    if (this.processing || this.queue.length === 0) {
+      return;
+    }
+
+    this.processing = true;
+
+    while (this.queue.length > 0) {
+      const item = this.queue.shift();
+      try {
+        const result = await item.txFunction();
+        item.resolve(result);
+      } catch (error) {
+        item.reject(error);
+      }
+    }
+
+    this.processing = false;
+  }
+}
+
+const txQueue = new TransactionQueue();
+
+/**
  * Nonce-based audit chain manager
  * Implements log-by-log blockchain recording with minimal on-chain data
  */
@@ -39,16 +88,11 @@ class AuditChainManager {
     if (!account) throw new Error('Blockchain not initialized');
 
     // Use 'pending' to include queued transactions
-    return await web3.eth.getTransactionCount(account.address, 'pending');
+    const nonce = await web3.eth.getTransactionCount(account.address, 'pending');
+    // Convert BigInt to number to avoid type mixing errors
+    return Number(nonce);
   }
 
-  /**
-   * Get the next log ID from database
-   */
-  async getNextLogId() {
-    const result = await pool.query('SELECT COALESCE(MAX(CAST(id AS BIGINT)), -1) + 1 as next_id FROM usage_logs WHERE tx_nonce IS NOT NULL');
-    return result.rows[0].next_id;
-  }
 
   /**
    * Calculate hash for log entry
@@ -73,16 +117,28 @@ class AuditChainManager {
 
   /**
    * Record a log entry to the blockchain using nonce chain approach
+   * Uses transaction queue to prevent nonce collisions
    */
   async recordLog(logData) {
+    return txQueue.add(() => this._recordLogInternal(logData));
+  }
+
+  /**
+   * Internal method that performs the actual blockchain transaction
+   * Called by the transaction queue to ensure sequential execution
+   */
+  async _recordLogInternal(logData) {
     if (!contract || !account) {
       throw new Error('Blockchain not initialized');
     }
 
     try {
-      // 1. Get current nonce and log ID
+      // 1. Get current nonce and determine log ID from contract
       const nonce = await this.getNextNonce();
-      const logId = await this.getNextLogId();
+
+      // IMPORTANT: Use contract's totalLogs as the source of truth for logId
+      // Database count can be out of sync during processing
+      const logId = Number(await contract.methods.totalLogs().call());
 
       // 2. Calculate hash using previous nonce
       const prevNonce = nonce > 0 ? nonce - 1 : 0;
@@ -91,14 +147,18 @@ class AuditChainManager {
       // 3. Determine if this is an anchor log
       const isAnchor = logId % ANCHOR_INTERVAL === 0;
 
-      // 4. Prepare anchor hash (12 bytes = 24 hex chars)
-      let anchorHash = '0x000000000000000000000000'; // Empty for regular logs
-      if (isAnchor) {
-        anchorHash = '0x' + localHash.substring(0, 24);
-      }
+      // 4. Prepare anchor hash (if needed)
+      const anchorHash = isAnchor ? ('0x' + localHash.substring(0, 24)) : null;
 
-      // 5. Send transaction to blockchain
-      const tx = contract.methods.recordLog(anchorHash);
+      // 5. Call appropriate function based on log type
+      let tx;
+      if (isAnchor) {
+        // Anchor log: call recordAnchor with 12-byte hash
+        tx = contract.methods.recordAnchor(anchorHash);
+      } else {
+        // Regular log: call recordLog with no parameters (minimal calldata)
+        tx = contract.methods.recordLog();
+      }
 
       // Estimate gas
       const gas = await tx.estimateGas({ from: account.address });
@@ -125,7 +185,7 @@ class AuditChainManager {
         '0x' + localHash,
         nonce,
         prevNonce,
-        receipt.blockNumber,
+        Number(receipt.blockNumber),  // Convert BigInt to number
         isAnchor ? anchorHash : null,
         receipt.transactionHash,
         logData.logId
@@ -361,6 +421,10 @@ export async function getBlockchainStats() {
       regularLog: regularCost + ' ETH',
       anchorLog: anchorCost + ' ETH',
       average: avgCostPerLog.toFixed(10) + ' ETH'
+    },
+    queue: {
+      queueLength: txQueue.queue.length,
+      processing: txQueue.processing
     }
   };
 }

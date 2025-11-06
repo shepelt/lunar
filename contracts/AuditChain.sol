@@ -28,24 +28,27 @@ contract AuditChain {
     uint256 public constant ANCHOR_INTERVAL = 10;
 
     /**
-     * @dev Record a log entry to the blockchain
-     * @param anchorHash First 12 bytes of the log hash (only for anchor logs, 0x000... for regular)
+     * @dev Record a regular log entry (no anchor hash)
+     * Optimized for minimal calldata - only 4 bytes (function selector)
      *
-     * How it works:
-     * - Each call increments totalLogs and emits LogRecorded event
-     * - Every 10th log (totalLogs % 10 == 0) also emits ChainAnchor with partial hash
-     * - Transaction nonce provides strict ordering (cannot be skipped or reordered)
-     * - Full data is stored in database with hash = SHA256(data || previous_nonce)
-     * - Anchor hashes enable quick verification without checking entire chain
+     * Used for 90% of logs where we only need the nonce for ordering
+     * Full data is stored in database with hash = SHA256(data || previous_nonce)
      */
-    function recordLog(bytes12 anchorHash) external {
+    function recordLog() external {
         emit LogRecorded(totalLogs);
+        totalLogs++;
+    }
 
-        // Emit anchor hash every ANCHOR_INTERVAL logs
-        if (totalLogs % ANCHOR_INTERVAL == 0) {
-            emit ChainAnchor(totalLogs, anchorHash);
-        }
-
+    /**
+     * @dev Record an anchor log entry with hash checkpoint
+     * @param anchorHash First 12 bytes of the log hash for verification
+     *
+     * Used for every 10th log to provide periodic verification checkpoints
+     * Calldata: 4 bytes (selector) + 32 bytes (padded hash) = 36 bytes
+     */
+    function recordAnchor(bytes12 anchorHash) external {
+        emit LogRecorded(totalLogs);
+        emit ChainAnchor(totalLogs, anchorHash);
         totalLogs++;
     }
 
@@ -53,7 +56,7 @@ contract AuditChain {
      * @dev Get contract version
      */
     function version() public pure returns (string memory) {
-        return "2.0.0-nonce-chain";
+        return "2.1.0-optimized";
     }
 
     /**
