@@ -6,7 +6,7 @@ import { logToBlockchain } from './blockchain.js';
 
 const router = express.Router();
 
-// Check quota for consumer (called by lunar-gateway plugin)
+// Check quota for consumer (called by noosphere-router plugin)
 router.get('/quota/check/:consumer_id', async (req, res) => {
   try {
     const { consumer_id } = req.params;
@@ -36,7 +36,7 @@ router.get('/quota/check/:consumer_id', async (req, res) => {
   }
 });
 
-// Log usage (called by lunar-gateway plugin after request)
+// Log usage (called by noosphere-router plugin after request)
 // FIXME: More efficient quota logging through batching / memory caching
 router.post('/quota/log', async (req, res) => {
   try {

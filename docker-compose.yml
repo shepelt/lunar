@@ -1,10 +1,10 @@
-# Lunar Gateway - Local Development with Super Image
+# Noosphere Router - Local Development with Super Image
 # Kong + Backend combined in a single container for consistency with production
 
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: lunar-postgres
+    container_name: noosphere-router-postgres
     environment:
       POSTGRES_USER: kong
       POSTGRES_PASSWORD: kongpass
@@ -14,7 +14,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
-      - lunar-network
+      - noosphere-router-network
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "kong"]
       interval: 10s
@@ -23,7 +23,7 @@ services:
 
   kong-migrations:
     image: kong:3.9.1
-    container_name: lunar-kong-migrations
+    container_name: noosphere-router-kong-migrations
     environment:
       KONG_DATABASE: postgres
       KONG_PG_HOST: postgres
@@ -33,17 +33,17 @@ services:
       KONG_PG_DATABASE: kong
     command: kong migrations bootstrap
     networks:
-      - lunar-network
+      - noosphere-router-network
     depends_on:
       postgres:
         condition: service_healthy
     restart: on-failure
 
-  lunar-super:
+  noosphere-router-super:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    container_name: lunar-super
+    container_name: noosphere-router-super
     environment:
       # Kong Database Configuration
       KONG_DATABASE: postgres
@@ -77,7 +77,7 @@ services:
       OLLAMA_MODEL_NAME: ${OLLAMA_MODEL_NAME:-gpt-oss:120b}
 
       # Public endpoint
-      LUNAR_ENDPOINT_URL: ${LUNAR_ENDPOINT_URL:-http://localhost:8000}
+      NOOSPHERE_ROUTER_ENDPOINT_URL: ${NOOSPHERE_ROUTER_ENDPOINT_URL:-http://localhost:8000}
 
       # Blockchain
       BLOCKCHAIN_PRIVATE_KEY: ${BLOCKCHAIN_PRIVATE_KEY:-}
@@ -95,7 +95,7 @@ services:
       - ./kong-plugins:/usr/local/kong/custom-plugins:ro
       - ./kong/kong.conf:/etc/kong/kong.conf:ro
     networks:
-      - lunar-network
+      - noosphere-router-network
     depends_on:
       postgres:
         condition: service_healthy
@@ -111,7 +111,7 @@ services:
 
   kong-provisioner:
     image: alpine:latest
-    container_name: lunar-kong-provisioner
+    container_name: noosphere-router-kong-provisioner
     volumes:
       - ./kong/kong.yaml:/kong-template.yaml:ro
       - ./kong/provision.sh:/provision.sh:ro
@@ -123,7 +123,7 @@ services:
       OLLAMA_MODEL_NAME: ${OLLAMA_MODEL_NAME:-gpt-oss:120b}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
-      KONG_ADMIN_URL: http://lunar-super:8001
+      KONG_ADMIN_URL: http://noosphere-router-super:8001
       DECK_VERSION: v1.41.1
     command: >
       sh -c "
@@ -135,15 +135,15 @@ services:
         /provision.sh
       "
     networks:
-      - lunar-network
+      - noosphere-router-network
     depends_on:
-      lunar-super:
+      noosphere-router-super:
         condition: service_healthy
     restart: on-failure
 
   test-runner:
     image: node:18-alpine
-    container_name: lunar-test-runner
+    container_name: noosphere-router-test-runner
     working_dir: /app
     volumes:
       - ./tests:/app/tests:ro
@@ -152,16 +152,16 @@ services:
       - ./node_modules:/app/node_modules:ro
     environment:
       # Test from inside Docker network
-      KONG_ADMIN_URL: http://lunar-super:8001
-      KONG_GATEWAY_URL: http://lunar-super:8000
+      KONG_ADMIN_URL: http://noosphere-router-super:8001
+      KONG_GATEWAY_URL: http://noosphere-router-super:8000
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
       NODE_OPTIONS: --experimental-vm-modules
       TEST_INTERNAL: "true"
     networks:
-      - lunar-network
+      - noosphere-router-network
     depends_on:
-      lunar-super:
+      noosphere-router-super:
         condition: service_healthy
       kong-provisioner:
         condition: service_completed_successfully
@@ -173,5 +173,5 @@ volumes:
   postgres-data:
 
 networks:
-  lunar-network:
+  noosphere-router-network:
     driver: bridge

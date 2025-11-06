@@ -1,4 +1,4 @@
-# Lunar Gateway - Docker Deployment
+# Noosphere Router - Docker Deployment
 
 Fully containerized deployment with Kong + Backend combined in a single container.
 
@@ -6,7 +6,7 @@ Fully containerized deployment with Kong + Backend combined in a single containe
 
 ```
 ┌─────────────────────────────────────┐
-│     lunar-super (Kong + Backend)    │
+│     noosphere-router-super (Kong + Backend)    │
 │  ┌───────────┐    ┌──────────────┐  │
 │  │   Kong    │    │   Node.js    │  │
 │  │  :8000    │    │   Backend    │  │
@@ -23,7 +23,7 @@ Fully containerized deployment with Kong + Backend combined in a single containe
 ```
 
 **Components:**
-- **lunar-super**: Combined Kong API Gateway + Node.js Backend
+- **noosphere-router-super**: Combined Kong API Gateway + Node.js Backend
 - **postgres**: PostgreSQL database (shared)
 - **kong-provisioner**: One-time Kong configuration setup
 
@@ -102,7 +102,7 @@ docker-compose up -d
 docker-compose ps
 
 # View logs
-docker-compose logs -f lunar-super
+docker-compose logs -f noosphere-router-super
 docker-compose logs -f postgres
 
 # Restart services
@@ -122,17 +122,17 @@ docker-compose down -v
 
 ### Check if services are running inside container
 ```bash
-docker exec lunar-super supervisorctl status
+docker exec noosphere-router-super supervisorctl status
 ```
 
 ### Access container shell
 ```bash
-docker exec -it lunar-super sh
+docker exec -it noosphere-router-super sh
 ```
 
 ### Check Kong configuration
 ```bash
-docker exec lunar-super kong config db_export
+docker exec noosphere-router-super kong config db_export
 ```
 
 ### Check backend health
@@ -146,7 +146,7 @@ curl http://localhost:5872/health
 docker-compose logs kong-provisioner
 
 # Verify Kong is running
-docker exec lunar-super kong health
+docker exec noosphere-router-super kong health
 ```
 
 ## Benefits of Combined Container
@@ -170,7 +170,7 @@ git clone <your-repo> ~/lunar
 cd ~/lunar/docker
 
 # Build the Lunar super image
-docker-compose build lunar-super
+docker-compose build noosphere-router-super
 
 # Pull required base images
 docker pull postgres:15-alpine
@@ -178,14 +178,14 @@ docker pull kong:3.9.0
 docker pull alpine:latest
 
 # Save images as tarballs
-docker save -o lunar-super.tar lunar-super:latest
+docker save -o noosphere-router-super.tar noosphere-router-super:latest
 docker save -o postgres-15-alpine.tar postgres:15-alpine
 docker save -o kong-3.9.0.tar kong:3.9.0
 docker save -o alpine-latest.tar alpine:latest
 
 # Create deployment package
 mkdir lunar-airgap-deployment
-cp lunar-super.tar postgres-15-alpine.tar kong-3.9.0.tar alpine-latest.tar lunar-airgap-deployment/
+cp noosphere-router-super.tar postgres-15-alpine.tar kong-3.9.0.tar alpine-latest.tar lunar-airgap-deployment/
 cp docker-compose.yml lunar-airgap-deployment/
 cp -r ../kong lunar-airgap-deployment/
 cp -r ../kong-plugins lunar-airgap-deployment/
@@ -197,7 +197,7 @@ cat > lunar-airgap-deployment/deploy.sh << 'EOF'
 set -e
 
 echo "Loading Docker images..."
-docker load -i lunar-super.tar
+docker load -i noosphere-router-super.tar
 docker load -i postgres-15-alpine.tar
 docker load -i kong-3.9.0.tar
 docker load -i alpine-latest.tar
@@ -223,7 +223,7 @@ echo "Transfer this file to your air-gapped machine"
 ```
 lunar-airgap-deployment.tar.gz
 └── lunar-airgap-deployment/
-    ├── lunar-super.tar          # Lunar application image (~200MB)
+    ├── noosphere-router-super.tar          # Lunar application image (~200MB)
     ├── postgres-15-alpine.tar   # PostgreSQL database Alpine (~50MB)
     ├── kong-3.9.0.tar          # Kong Gateway (~120MB)
     ├── alpine-latest.tar        # Alpine Linux (~4MB)
@@ -264,10 +264,10 @@ curl http://localhost:5872/health
 
 ```bash
 # Check loaded images
-docker images | grep -E 'lunar-super|postgres|kong|alpine'
+docker images | grep -E 'noosphere-router-super|postgres|kong|alpine'
 
 # Expected output:
-# lunar-super       latest    ...    937MB
+# noosphere-router-super       latest    ...    937MB
 # postgres          15-alpine ...    230MB
 # kong              3.9.0     ...    550MB
 # alpine            latest    ...    13MB
@@ -295,7 +295,7 @@ curl http://localhost:8001/status        # Kong status
 1. Build new images on internet-connected machine
 2. Create new deployment package
 3. Transfer to air-gapped machine
-4. Load new images: `docker load -i lunar-super.tar`
+4. Load new images: `docker load -i noosphere-router-super.tar`
 5. Restart services: `docker-compose up -d --force-recreate`
 
 ### Alternative: Save Running System

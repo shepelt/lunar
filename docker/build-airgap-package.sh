@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build Lunar Air-Gapped Deployment Package
+# Build Noosphere Router Air-Gapped Deployment Package
 # This script creates a complete deployment package that can be transferred
 # to machines without internet access or GitHub access.
 #
@@ -10,8 +10,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-PACKAGE_DIR="lunar-airgap-deployment"
-PACKAGE_FILE="lunar-airgap-deployment.tar.gz"
+PACKAGE_DIR="noosphere-router-airgap-deployment"
+PACKAGE_FILE="noosphere-router-airgap-deployment.tar.gz"
 
 # Parse command line arguments
 INCLUDE_POSTGRES=true
@@ -29,7 +29,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-echo "🌙 Building Lunar Air-Gapped Deployment Package"
+echo "🌙 Building Noosphere Router Air-Gapped Deployment Package"
 echo "================================================"
 if [ "$INCLUDE_POSTGRES" = false ]; then
   echo "⚠️  PostgreSQL will be EXCLUDED from this package"
@@ -49,19 +49,19 @@ fi
 # Create package directory
 mkdir -p "$PACKAGE_DIR"
 
-# Step 1: Build Lunar super image
-echo "📦 Building Lunar super image..."
+# Step 1: Build Noosphere Router super image
+echo "📦 Building Noosphere Router super image..."
 cd "$SCRIPT_DIR"
-docker-compose build lunar-super
+docker-compose build noosphere-router-super
 
 # Tag the image with a consistent name
-echo "🏷️  Tagging image as lunar-super:latest..."
-BUILT_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -E "docker.*lunar-super|lunar.*super" | head -1)
+echo "🏷️  Tagging image as noosphere-router-super:latest..."
+BUILT_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -E "docker.*noosphere-router-super|lunar.*super" | head -1)
 if [ -z "$BUILT_IMAGE" ]; then
-  echo "❌ Error: Could not find built lunar-super image"
+  echo "❌ Error: Could not find built noosphere-router-super image"
   exit 1
 fi
-docker tag "$BUILT_IMAGE" lunar-super:latest
+docker tag "$BUILT_IMAGE" noosphere-router-super:latest
 
 # Step 2: Pull base images
 echo "📥 Pulling base images..."
@@ -73,8 +73,8 @@ docker pull alpine:latest
 
 # Step 3: Save images as tarballs
 echo "💾 Saving Docker images as tarballs..."
-echo "  - lunar-super (this may take a few minutes)..."
-docker save -o "$PACKAGE_DIR/lunar-super.tar" lunar-super:latest
+echo "  - noosphere-router-super (this may take a few minutes)..."
+docker save -o "$PACKAGE_DIR/noosphere-router-super.tar" noosphere-router-super:latest
 
 if [ "$INCLUDE_POSTGRES" = true ]; then
   echo "  - postgres:15-alpine..."
@@ -99,7 +99,7 @@ cp "$PROJECT_ROOT/.env.example" "$PACKAGE_DIR/.env.example"
 # Create modified docker-compose.yml for air-gap deployment
 echo "📝 Creating air-gap docker-compose.yml..."
 cat docker-compose.yml | \
-  sed 's|build:|image: lunar-super:latest\n    # build:|' | \
+  sed 's|build:|image: noosphere-router-super:latest\n    # build:|' | \
   sed 's|context: ..|# context: ..|' | \
   sed 's|dockerfile: docker/Dockerfile|# dockerfile: docker/Dockerfile|' | \
   sed 's|\.\./kong/|./kong/|g' | \
@@ -112,7 +112,7 @@ cat > "$PACKAGE_DIR/deploy.sh" << 'EOF'
 #!/bin/bash
 set -e
 
-echo "🌙 Lunar Gateway - Air-Gapped Deployment"
+echo "🌙 Noosphere Router Gateway - Air-Gapped Deployment"
 echo "========================================="
 echo ""
 
@@ -128,8 +128,8 @@ if ! command -v docker-compose &> /dev/null; then
 fi
 
 echo "Loading Docker images..."
-echo "  - lunar-super.tar..."
-docker load -i lunar-super.tar
+echo "  - noosphere-router-super.tar..."
+docker load -i noosphere-router-super.tar
 
 if [ -f "postgres-15-alpine.tar" ]; then
   echo "  - postgres-15-alpine.tar..."
@@ -160,14 +160,14 @@ chmod +x "$PACKAGE_DIR/deploy.sh"
 # Step 6: Create README
 echo "📖 Creating deployment README..."
 cat > "$PACKAGE_DIR/README.txt" << EOF
-Lunar Gateway - Air-Gapped Deployment Package
+Noosphere Router Gateway - Air-Gapped Deployment Package
 ==============================================
 
-This package contains everything needed to deploy Lunar Gateway on a
+This package contains everything needed to deploy Noosphere Router Gateway on a
 machine without internet access or GitHub access.
 
 CONTENTS:
-  - lunar-super.tar        : Lunar application (Kong + Backend)
+  - noosphere-router-super.tar        : Noosphere Router application (Kong + Backend)
 $([ "$INCLUDE_POSTGRES" = true ] && echo "  - postgres-15-alpine.tar : PostgreSQL database (Alpine Linux)" || echo "  (PostgreSQL not included - use existing installation)")
   - kong-3.9.1.tar         : Kong Gateway base image
   - alpine-latest.tar      : Alpine Linux (for provisioner)
@@ -215,7 +215,7 @@ TROUBLESHOOTING:
   - View logs: docker-compose logs -f
   - Check status: docker-compose ps
   - Restart: docker-compose restart
-  - Shell access: docker exec -it lunar-super sh
+  - Shell access: docker exec -it noosphere-router-super sh
 
 For full documentation, see docker/README.md in the source repository.
 EOF

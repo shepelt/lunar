@@ -52,14 +52,14 @@ async function testAuthentication(username, password) {
  */
 async function cleanupTestConsumer() {
   try {
-    // Get all credentials for lunar-admin consumer
-    const credsResponse = await kongAdminRequest('/consumers/lunar-admin/basic-auth');
+    // Get all credentials for noosphere-router-admin consumer
+    const credsResponse = await kongAdminRequest('/consumers/noosphere-router-admin/basic-auth');
     if (credsResponse.ok) {
       const creds = await credsResponse.json();
 
       // Delete all credentials
       for (const cred of creds.data || []) {
-        await kongAdminRequest(`/consumers/lunar-admin/basic-auth/${cred.id}`, {
+        await kongAdminRequest(`/consumers/noosphere-router-admin/basic-auth/${cred.id}`, {
           method: 'DELETE'
         });
       }
@@ -89,7 +89,7 @@ describe('Kong Provisioning Integration Tests', () => {
     // so other tests can continue to work
     try {
       // Get current credentials
-      const credsResponse = await kongAdminRequest('/consumers/lunar-admin/basic-auth');
+      const credsResponse = await kongAdminRequest('/consumers/noosphere-router-admin/basic-auth');
       if (credsResponse.ok) {
         const creds = await credsResponse.json();
 
@@ -102,7 +102,7 @@ describe('Kong Provisioning Integration Tests', () => {
           formData.append('username', TEST_ADMIN_USERNAME);
           formData.append('password', TEST_ADMIN_PASSWORD);
 
-          await kongAdminRequest('/consumers/lunar-admin/basic-auth', {
+          await kongAdminRequest('/consumers/noosphere-router-admin/basic-auth', {
             method: 'POST',
             body: formData
           });
@@ -113,29 +113,29 @@ describe('Kong Provisioning Integration Tests', () => {
     }
   });
 
-  test('should create lunar-admin consumer if not exists', async () => {
+  test('should create noosphere-router-admin consumer if not exists', async () => {
     // Try to create consumer
     const response = await kongAdminRequest('/consumers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: 'lunar-admin' })
+      body: JSON.stringify({ username: 'noosphere-router-admin' })
     });
 
     // Should either create (201) or already exist (409)
     expect([201, 409]).toContain(response.status);
 
     // Verify consumer exists
-    const getResponse = await kongAdminRequest('/consumers/lunar-admin');
+    const getResponse = await kongAdminRequest('/consumers/noosphere-router-admin');
     expect(getResponse.ok).toBe(true);
 
     const consumer = await getResponse.json();
-    expect(consumer.username).toBe('lunar-admin');
+    expect(consumer.username).toBe('noosphere-router-admin');
     expect(consumer.id).toBeDefined();
   });
 
   test('should extract consumer ID from API response using jq pattern', async () => {
     // Simulate what provision.sh does
-    const response = await kongAdminRequest('/consumers/lunar-admin');
+    const response = await kongAdminRequest('/consumers/noosphere-router-admin');
     const consumer = await response.json();
 
     // Test jq pattern: .id
@@ -146,11 +146,11 @@ describe('Kong Provisioning Integration Tests', () => {
 
   test('should create basic-auth credential with special characters in password', async () => {
     // Delete existing credential first (if any)
-    const existingCredsResponse = await kongAdminRequest('/consumers/lunar-admin/basic-auth');
+    const existingCredsResponse = await kongAdminRequest('/consumers/noosphere-router-admin/basic-auth');
     if (existingCredsResponse.ok) {
       const existingCreds = await existingCredsResponse.json();
       for (const cred of existingCreds.data || []) {
-        await kongAdminRequest(`/consumers/lunar-admin/basic-auth/${cred.id}`, {
+        await kongAdminRequest(`/consumers/noosphere-router-admin/basic-auth/${cred.id}`, {
           method: 'DELETE'
         });
       }
@@ -161,7 +161,7 @@ describe('Kong Provisioning Integration Tests', () => {
     formData.append('username', TEST_ADMIN_USERNAME);
     formData.append('password', TEST_ADMIN_PASSWORD);
 
-    const response = await kongAdminRequest('/consumers/lunar-admin/basic-auth', {
+    const response = await kongAdminRequest('/consumers/noosphere-router-admin/basic-auth', {
       method: 'POST',
       body: formData
     });
@@ -180,7 +180,7 @@ describe('Kong Provisioning Integration Tests', () => {
 
   test('should extract credential ID correctly (not consumer ID)', async () => {
     // Get credentials list
-    const response = await kongAdminRequest('/consumers/lunar-admin/basic-auth');
+    const response = await kongAdminRequest('/consumers/noosphere-router-admin/basic-auth');
     expect(response.ok).toBe(true);
 
     const data = await response.json();
@@ -195,7 +195,7 @@ describe('Kong Provisioning Integration Tests', () => {
       expect(typeof firstCred.id).toBe('string');
 
       // Credential ID should be different from consumer ID
-      const consumerResponse = await kongAdminRequest('/consumers/lunar-admin');
+      const consumerResponse = await kongAdminRequest('/consumers/noosphere-router-admin');
       const consumer = await consumerResponse.json();
 
       expect(firstCred.id).not.toBe(consumer.id);
@@ -205,7 +205,7 @@ describe('Kong Provisioning Integration Tests', () => {
 
   test('should handle idempotent credential updates', async () => {
     // Get existing credential
-    const getResponse = await kongAdminRequest('/consumers/lunar-admin/basic-auth');
+    const getResponse = await kongAdminRequest('/consumers/noosphere-router-admin/basic-auth');
     const initialData = await getResponse.json();
     const initialCredId = initialData.data[0]?.id;
 
@@ -213,7 +213,7 @@ describe('Kong Provisioning Integration Tests', () => {
 
     // Delete existing credential
     const deleteResponse = await kongAdminRequest(
-      `/consumers/lunar-admin/basic-auth/${initialCredId}`,
+      `/consumers/noosphere-router-admin/basic-auth/${initialCredId}`,
       { method: 'DELETE' }
     );
     expect(deleteResponse.ok).toBe(true);
@@ -224,7 +224,7 @@ describe('Kong Provisioning Integration Tests', () => {
     formData.append('username', TEST_ADMIN_USERNAME);
     formData.append('password', newPassword);
 
-    const createResponse = await kongAdminRequest('/consumers/lunar-admin/basic-auth', {
+    const createResponse = await kongAdminRequest('/consumers/noosphere-router-admin/basic-auth', {
       method: 'POST',
       body: formData
     });
@@ -239,7 +239,7 @@ describe('Kong Provisioning Integration Tests', () => {
     expect(authWorks).toBe(true);
 
     // CLEANUP: Restore original password for other tests
-    await kongAdminRequest(`/consumers/lunar-admin/basic-auth/${newCred.id}`, {
+    await kongAdminRequest(`/consumers/noosphere-router-admin/basic-auth/${newCred.id}`, {
       method: 'DELETE'
     });
 
@@ -247,7 +247,7 @@ describe('Kong Provisioning Integration Tests', () => {
     restoreFormData.append('username', TEST_ADMIN_USERNAME);
     restoreFormData.append('password', TEST_ADMIN_PASSWORD);
 
-    await kongAdminRequest('/consumers/lunar-admin/basic-auth', {
+    await kongAdminRequest('/consumers/noosphere-router-admin/basic-auth', {
       method: 'POST',
       body: restoreFormData
     });
@@ -280,7 +280,7 @@ describe('Kong Provisioning Integration Tests', () => {
     // Test the actual jq patterns used in provision.sh
 
     // Pattern 1: Extract consumer ID from create/get response
-    const consumerResponse = await kongAdminRequest('/consumers/lunar-admin');
+    const consumerResponse = await kongAdminRequest('/consumers/noosphere-router-admin');
     const consumer = await consumerResponse.json();
 
     // Simulate: jq -r '.id // empty'
@@ -288,7 +288,7 @@ describe('Kong Provisioning Integration Tests', () => {
     expect(consumerId).toBeTruthy();
 
     // Pattern 2: Extract credential ID from list
-    const credsResponse = await kongAdminRequest('/consumers/lunar-admin/basic-auth');
+    const credsResponse = await kongAdminRequest('/consumers/noosphere-router-admin/basic-auth');
     const creds = await credsResponse.json();
 
     // Simulate: jq -r '.data[0].id // empty'
@@ -340,7 +340,7 @@ describe('Kong Provisioning Integration Tests', () => {
       formData.append('password', 'TestPass123');
 
       try {
-        const response = await kongAdminRequest('/consumers/lunar-admin/basic-auth', {
+        const response = await kongAdminRequest('/consumers/noosphere-router-admin/basic-auth', {
           method: 'POST',
           body: formData
         });
@@ -356,12 +356,12 @@ describe('Kong Provisioning Integration Tests', () => {
     expect(results.some(r => r === true)).toBe(true);
 
     // Cleanup concurrent test credentials
-    const credsResponse = await kongAdminRequest('/consumers/lunar-admin/basic-auth');
+    const credsResponse = await kongAdminRequest('/consumers/noosphere-router-admin/basic-auth');
     const creds = await credsResponse.json();
 
     for (const cred of creds.data || []) {
       if (cred.username.startsWith('concurrent-test-')) {
-        await kongAdminRequest(`/consumers/lunar-admin/basic-auth/${cred.id}`, {
+        await kongAdminRequest(`/consumers/noosphere-router-admin/basic-auth/${cred.id}`, {
           method: 'DELETE'
         });
       }

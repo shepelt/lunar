@@ -12,7 +12,7 @@ export ADMIN_PASSWORD="${ADMIN_PASSWORD:-changeme}"
 envsubst < /kong-template.yaml > /tmp/kong.yaml
 
 # Sync Kong configuration
-# For super image deployment, Kong runs inside lunar-super container
+# For super image deployment, Kong runs inside noosphere-router-super container
 # --skip-consumers: Don't manage consumers (they're managed by backend API)
 KONG_ADDR="${KONG_ADMIN_URL:-http://kong:8001}"
 deck gateway sync /tmp/kong.yaml --kong-addr="$KONG_ADDR" --skip-consumers
@@ -23,28 +23,28 @@ echo "Setting up admin basic-auth..."
 # Try to create consumer, capture response
 CONSUMER_RESPONSE=$(curl -s -X POST "$KONG_ADDR/consumers" \
   -H "Content-Type: application/json" \
-  -d '{"username": "lunar-admin"}')
+  -d '{"username": "noosphere-router-admin"}')
 
 # Extract consumer ID from response (whether newly created or error response)
 CONSUMER_ID=$(echo "$CONSUMER_RESPONSE" | jq -r '.id // empty')
 
 # If consumer creation failed (already exists), fetch the existing one
 if [ -z "$CONSUMER_ID" ]; then
-  CONSUMER_ID=$(curl -s "$KONG_ADDR/consumers/lunar-admin" | jq -r '.id')
+  CONSUMER_ID=$(curl -s "$KONG_ADDR/consumers/noosphere-router-admin" | jq -r '.id')
 fi
 
 # Get existing basic-auth credentials for this consumer
-EXISTING_CREDS=$(curl -s "$KONG_ADDR/consumers/lunar-admin/basic-auth")
+EXISTING_CREDS=$(curl -s "$KONG_ADDR/consumers/noosphere-router-admin/basic-auth")
 EXISTING_CRED_ID=$(echo "$EXISTING_CREDS" | jq -r '.data[0].id // empty')
 
 # Delete existing credential if found
 if [ -n "$EXISTING_CRED_ID" ]; then
-  curl -s -X DELETE "$KONG_ADDR/consumers/lunar-admin/basic-auth/$EXISTING_CRED_ID" > /dev/null 2>&1 || true
+  curl -s -X DELETE "$KONG_ADDR/consumers/noosphere-router-admin/basic-auth/$EXISTING_CRED_ID" > /dev/null 2>&1 || true
 fi
 
 # Create new credential with current password from environment
 # Use form-encoded data to properly handle special characters in password
-CRED_RESPONSE=$(curl -s -X POST "$KONG_ADDR/consumers/lunar-admin/basic-auth" \
+CRED_RESPONSE=$(curl -s -X POST "$KONG_ADDR/consumers/noosphere-router-admin/basic-auth" \
   --data-urlencode "username=$ADMIN_USERNAME" \
   --data-urlencode "password=$ADMIN_PASSWORD")
 

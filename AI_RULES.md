@@ -1,7 +1,7 @@
-# AI Development Rules for Lunar
+# AI Development Rules for Noosphere Router
 
 ## Project Overview
-Lunar (Language Model Union Network & Audit Relay) is an LLM Gateway connecting Noosphere to LLM providers with billing, auditing, and quota management capabilities.
+Noosphere Router (formerly Lunar) is an LLM Gateway connecting Noosphere to LLM providers with billing, auditing, and quota management capabilities.
 
 ## Technology Stack
 - **Gateway**: Kong API Gateway (with Postgres)

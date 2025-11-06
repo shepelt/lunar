@@ -1,7 +1,7 @@
 local typedefs = require "kong.db.schema.typedefs"
 
 return {
-  name = "lunar-gateway",
+  name = "noosphere-router",
   fields = {
     { consumer = typedefs.no_consumer },
     { protocols = typedefs.protocols_http },

@@ -1,7 +1,7 @@
 local http = require "resty.http"
 local cjson = require "cjson.safe"
 
-local LunarGatewayHandler = {
+local NoosphereRouterHandler = {
   PRIORITY = 1100,  -- Run before ai-proxy (priority ~800)
   VERSION = "1.0.0"
 }
@@ -37,12 +37,12 @@ local function call_backend_sync(method, url, body)
 end
 
 -- Rewrite phase: No longer used (transformations moved to backend)
-function LunarGatewayHandler:rewrite(conf)
+function NoosphereRouterHandler:rewrite(conf)
   -- Transformations now handled by Express backend (src/llm-router.js)
 end
 
 -- Access phase: Check quota before allowing request
-function LunarGatewayHandler:access(conf)
+function NoosphereRouterHandler:access(conf)
 
   -- Capture request body (must be done in access phase before proxying)
   -- Try to get body from memory first
@@ -167,7 +167,7 @@ function LunarGatewayHandler:access(conf)
 end
 
 -- Body filter phase: Capture response body chunks
-function LunarGatewayHandler:body_filter(conf)
+function NoosphereRouterHandler:body_filter(conf)
   local ctx = kong.ctx.plugin
   local chunk = ngx.arg[1]
 
@@ -183,7 +183,7 @@ function LunarGatewayHandler:body_filter(conf)
 end
 
 -- Log phase: Log usage after request completes (runs in background timer)
-function LunarGatewayHandler:log(conf)
+function NoosphereRouterHandler:log(conf)
   -- Get consumer ID from context (stored in access phase)
   local consumer_id = kong.ctx.plugin.consumer_id
 
@@ -249,4 +249,4 @@ function LunarGatewayHandler:log(conf)
   end
 end
 
-return LunarGatewayHandler
+return NoosphereRouterHandler

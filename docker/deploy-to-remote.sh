@@ -19,7 +19,7 @@ echo ""
 
 # Transfer and extract airgap package
 echo "📦 Transferring airgap package..."
-PACKAGE_FILE="lunar-airgap-deployment.tar.gz"
+PACKAGE_FILE="noosphere-router-airgap-deployment.tar.gz"
 if [ ! -f "$SCRIPT_DIR/$PACKAGE_FILE" ]; then
   echo "❌ Error: $PACKAGE_FILE not found. Run 'npm run docker:build:airgap' first."
   exit 1
@@ -32,7 +32,7 @@ ssh $REMOTE_HOST "cd ~ && tar -xzf /tmp/$PACKAGE_FILE && rm /tmp/$PACKAGE_FILE"
 
 # Create .env only if it doesn't exist on remote
 echo "📝 Checking for .env on remote server..."
-if ssh $REMOTE_HOST "[ -f ~/lunar-airgap-deployment/.env ]"; then
+if ssh $REMOTE_HOST "[ -f ~/noosphere-router-airgap-deployment/.env ]"; then
   echo "✅ Preserving existing .env file on remote server"
 else
   echo "📝 Creating new .env file for $REMOTE_HOST (first time setup)..."
@@ -50,7 +50,7 @@ else
     > "$TMP_ENV"
 
   echo "📤 Transferring configured .env file..."
-  scp "$TMP_ENV" "$REMOTE_HOST:~/lunar-airgap-deployment/.env"
+  scp "$TMP_ENV" "$REMOTE_HOST:~/noosphere-router-airgap-deployment/.env"
 
   # Clean up temp file
   rm "$TMP_ENV"
@@ -62,7 +62,7 @@ echo "🚀 Deploying on remote server..."
 ssh $REMOTE_HOST "bash -s" << 'EOF'
 set -e
 
-cd ~/lunar-airgap-deployment
+cd ~/noosphere-router-airgap-deployment
 
 # Detect Docker paths (support both Docker Desktop and Colima)
 if [ -f /opt/homebrew/bin/docker ]; then
@@ -90,7 +90,7 @@ $DOCKER_COMPOSE_CMD down || true
 
 # Load new images
 echo "📦 Loading updated images..."
-$DOCKER_CMD load -i lunar-super.tar
+$DOCKER_CMD load -i noosphere-router-super.tar
 $DOCKER_CMD load -i kong-3.9.1.tar
 
 # Start services with architecture detection
@@ -109,7 +109,7 @@ $DOCKER_COMPOSE_CMD ps
 
 echo ""
 echo "🔍 Recent logs:"
-$DOCKER_COMPOSE_CMD logs --tail=20 lunar-super
+$DOCKER_COMPOSE_CMD logs --tail=20 noosphere-router-super
 
 echo ""
 echo "✅ Deployment complete!"

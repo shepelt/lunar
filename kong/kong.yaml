@@ -1,7 +1,7 @@
 _format_version: "3.0"
 
 services:
-  - name: lunar-backend
+  - name: noosphere-router-backend
     host: host.docker.internal
     port: 5872
     protocol: http
@@ -32,7 +32,7 @@ services:
               key_in_query: true
               hide_credentials: false
 
-  - name: lunar-backend-admin
+  - name: noosphere-router-backend-admin
     url: ${BACKEND_URL}
     routes:
       - name: admin-api
@@ -85,7 +85,7 @@ services:
   # UNIFIED LLM GATEWAY - OpenRouter-style single endpoint
   # ============================================================================
 
-  # Internal routes (not directly accessible) - used by lunar-gateway for routing
+  # Internal routes (not directly accessible) - used by noosphere-router for routing
   - name: openai-internal
     url: http://localhost:32000  # ai-proxy will override this
     connect_timeout: 1800000
@@ -234,7 +234,7 @@ services:
               key_in_header: true
               key_in_query: true
               hide_credentials: false
-          - name: lunar-gateway
+          - name: noosphere-router
             config:
               backend_url: ${BACKEND_URL}
               enable_routing: false  # Routing handled by backend

@@ -91,7 +91,7 @@ router.get('/consumers', async (req, res) => {
     `);
 
     const consumers = result.rows
-      .filter(row => row.username !== 'lunar-admin') // Hide lunar-admin from dashboard
+      .filter(row => row.username !== 'noosphere-router-admin') // Hide noosphere-router-admin from dashboard
       .map(row => ({
         id: row.consumer_id,
         username: row.username,
@@ -270,7 +270,7 @@ router.get('/audit', async (req, res) => {
     const params = [];
 
     // Filter by consumer if authenticated via Kong (but not for admin users)
-    if (req.consumer && req.consumer.username !== 'lunar-admin') {
+    if (req.consumer && req.consumer.username !== 'noosphere-router-admin') {
       // Regular consumers only see their own logs
       params.push(req.consumer.id);
       query += ` AND consumer_id = $${params.length}`;
@@ -279,7 +279,7 @@ router.get('/audit', async (req, res) => {
       params.push(req.query.consumer_id);
       query += ` AND consumer_id = $${params.length}`;
     }
-    // If consumer is lunar-admin or no consumer, show all logs
+    // If consumer is noosphere-router-admin or no consumer, show all logs
 
     params.push(parseInt(limit));
     query += ` ORDER BY created_at DESC LIMIT $${params.length}`;
@@ -348,7 +348,7 @@ router.get('/config', async (req, res) => {
     const response = {
       ollama_model: process.env.OLLAMA_MODEL_NAME || 'gpt-oss:120b',
       ollama_backend: process.env.OLLAMA_BACKEND_URL || 'http://localhost:11434',
-      lunar_endpoint_url: process.env.LUNAR_ENDPOINT_URL || 'http://localhost:8000',
+      noosphere_router_endpoint_url: process.env.NOOSPHERE_ROUTER_ENDPOINT_URL || 'http://localhost:8000',
       blockchain_enabled
     };
 
@@ -437,12 +437,12 @@ router.delete('/admin/consumers/:consumer_id', async (req, res) => {
     const { consumer_id } = req.params;
     const kongAdminUrl = process.env.KONG_ADMIN_URL || 'http://localhost:8001';
 
-    // First, check if this is the lunar-admin consumer (protect it from deletion)
+    // First, check if this is the noosphere-router-admin consumer (protect it from deletion)
     const consumerResponse = await fetch(`${kongAdminUrl}/consumers/${consumer_id}`);
     if (consumerResponse.ok) {
       const consumer = await consumerResponse.json();
-      if (consumer.username === 'lunar-admin') {
-        return res.status(403).json({ error: 'Cannot delete lunar-admin consumer (used for basic auth)' });
+      if (consumer.username === 'noosphere-router-admin') {
+        return res.status(403).json({ error: 'Cannot delete noosphere-router-admin consumer (used for basic auth)' });
       }
     }
 
@@ -502,12 +502,12 @@ router.post('/llm/v1/chat/completions', async (req, res) => {
     const originalModel = requestBody.model;
 
     // Map any custom model name to the Kong-configured model
-    // This allows Dyad and other clients to use custom model names like "lunar-openai"
+    // This allows Dyad and other clients to use custom model names like "noosphere-openai"
     if (requestBody.model && requestBody.model !== 'gpt-5') {
       requestBody.model = 'gpt-5'; // Use the model configured in kong.yaml
     }
 
-    // Note: Kong's lunar-gateway plugin handles max_tokens ↔ max_completion_tokens
+    // Note: Kong's noosphere-router plugin handles max_tokens ↔ max_completion_tokens
     // transformation based on provider (GPT-5/o1 vs Ollama). Backend stays transparent.
 
     // Forward request to Kong with apikey header
@@ -643,7 +643,7 @@ router.get('/ai-proxy/status', async (req, res) => {
     const data = await response.json();
 
     const aiProxyPlugins = data.data.filter(p => p.name === 'ai-proxy');
-    const lunarGatewayPlugins = data.data.filter(p => p.name === 'lunar-gateway');
+    const noosphereRouterPlugins = data.data.filter(p => p.name === 'noosphere-router');
 
     if (aiProxyPlugins.length === 0) {
       return res.json({
@@ -656,12 +656,12 @@ router.get('/ai-proxy/status', async (req, res) => {
     const providers = aiProxyPlugins.map(plugin => {
       const config = plugin.config;
 
-      // Check if API key is configured via ai-proxy auth (old way) or lunar-gateway (new way)
+      // Check if API key is configured via ai-proxy auth (old way) or noosphere-router (new way)
       const hasDirectAuth = config.auth && config.auth.header_value && config.auth.header_value.length > 0;
-      const hasLunarGateway = lunarGatewayPlugins.some(lg =>
+      const hasNoosphereRouter = noosphereRouterPlugins.some(lg =>
         lg.config?.openai_api_key && lg.config.openai_api_key.length > 0
       );
-      const hasApiKey = hasDirectAuth || hasLunarGateway;
+      const hasApiKey = hasDirectAuth || hasNoosphereRouter;
 
       return {
         provider: config.model?.provider || 'unknown',
@@ -694,14 +694,14 @@ router.get('/info', async (req, res) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LunarGW - LLM Gateway</title>
+  <title>Noosphere Router - LLM Gateway</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gradient-to-br from-gray-900 via-purple-900 to-blue-900 min-h-screen flex items-center justify-center p-6">
   <div class="max-w-3xl mx-auto bg-black bg-opacity-60 backdrop-blur-lg rounded-2xl shadow-2xl p-10 border border-purple-500">
     <div class="text-center mb-8">
-      <h1 class="text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400 mb-4">🌙 LunarGW</h1>
-      <p class="text-xl text-gray-300">Language Model Union Network & Audit Relay</p>
+      <h1 class="text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400 mb-4">Noosphere Router</h1>
+      <p class="text-xl text-gray-300">LLM Gateway for Noosphere</p>
       <p class="text-sm text-gray-500 mt-2">Version ${version}</p>
     </div>
 

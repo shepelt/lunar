@@ -267,7 +267,7 @@ function renderProvidersCombined(stats, config) {
   const container = document.getElementById('providers-combined');
 
   // Update unified endpoint display
-  const baseUrl = config.lunar_endpoint_url || 'http://localhost:8000';
+  const baseUrl = config.noosphere_router_endpoint_url || 'http://localhost:8000';
   const unifiedEndpoint = `${baseUrl}/llm/v1/chat/completions`;
   document.getElementById('unified-endpoint').textContent = unifiedEndpoint;
 
@@ -616,7 +616,7 @@ document.addEventListener('DOMContentLoaded', () => {
   modelInput.addEventListener('input', updateModelDisplay);
 
   // Load saved API key from localStorage
-  const savedApiKey = localStorage.getItem('lunar_test_api_key');
+  const savedApiKey = localStorage.getItem('noosphere_router_test_api_key');
   if (savedApiKey) {
     apiKeyInput.value = savedApiKey;
   }
@@ -625,9 +625,9 @@ document.addEventListener('DOMContentLoaded', () => {
   apiKeyInput.addEventListener('input', () => {
     const apiKey = apiKeyInput.value.trim();
     if (apiKey) {
-      localStorage.setItem('lunar_test_api_key', apiKey);
+      localStorage.setItem('noosphere_router_test_api_key', apiKey);
     } else {
-      localStorage.removeItem('lunar_test_api_key');
+      localStorage.removeItem('noosphere_router_test_api_key');
     }
   });
 

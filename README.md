@@ -1,4 +1,4 @@
-# 🌙 Lunar Gateway
+# Noosphere Router
 
 LLM API Gateway with quota management and usage tracking
 
@@ -7,12 +7,12 @@ LLM API Gateway with quota management and usage tracking
 ```
 Client → Kong Gateway (port 8000)
          ├─ key-auth plugin (authentication)
-         ├─ lunar-gateway plugin (quota check + usage capture)
+         ├─ noosphere-router plugin (quota check + usage capture)
          └─ ai-proxy plugin (forward to LLM)
                   ↓
               OpenAI API
                   ↓
-         lunar-gateway (captures response)
+         noosphere-router (captures response)
                   ↓
          Backend API (port 3000)
          - Decompresses response
@@ -161,7 +161,7 @@ PostgreSQL database (shared with Kong) with tables:
 
 ✅ **Implemented:**
 - **Kong API Gateway** with key-auth authentication
-- **Custom Lua plugin** (`lunar-gateway`) for quota management
+- **Custom Lua plugin** (`noosphere-router`) for quota management
   - Pre-request quota check (fail fast if quota exceeded)
   - Response body capture (handles gzip compression)
   - Async usage logging (no latency impact)
@@ -184,14 +184,14 @@ PostgreSQL database (shared with Kong) with tables:
 
 1. **Request arrives** at Kong with API key
 2. **key-auth plugin** validates key and identifies consumer
-3. **lunar-gateway plugin (access phase)** checks quota with backend
+3. **noosphere-router plugin (access phase)** checks quota with backend
    - If insufficient quota → returns 429 immediately
    - If quota available → request proceeds
 4. **ai-proxy plugin** forwards request to OpenAI
-5. **lunar-gateway plugin (body_filter phase)** captures response chunks
+5. **noosphere-router plugin (body_filter phase)** captures response chunks
    - Response is gzip-compressed by Kong/OpenAI
    - Plugin collects compressed chunks
-6. **lunar-gateway plugin (log phase)** sends data to backend
+6. **noosphere-router plugin (log phase)** sends data to backend
    - Runs in async timer (no client latency)
    - Sends: consumer_id, model, status, compressed response (base64)
 7. **Backend** processes usage

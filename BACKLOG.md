@@ -1,4 +1,4 @@
-# Lunar Backlog
+# Noosphere Router Backlog
 
 ## Rules
 - Keep backlog items short and simple, ideally one-liners
@@ -27,6 +27,9 @@
 
 ## In Progress
 
+
+## Done (v0.2)
+- TASK-20: Renamed "Lunar GW" to "Noosphere Router" throughout the project
 
 ## Fix Me
 - Upstream error handling (timeout, etc)
