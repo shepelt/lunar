@@ -77,6 +77,37 @@ export async function initDatabase() {
         EXCEPTION
           WHEN duplicate_column THEN NULL;
         END;
+        -- Nonce chain columns
+        BEGIN
+          ALTER TABLE usage_logs ADD COLUMN local_hash TEXT;
+        EXCEPTION
+          WHEN duplicate_column THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE usage_logs ADD COLUMN tx_nonce BIGINT;
+        EXCEPTION
+          WHEN duplicate_column THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE usage_logs ADD COLUMN prev_tx_nonce BIGINT;
+        EXCEPTION
+          WHEN duplicate_column THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE usage_logs ADD COLUMN block_number BIGINT;
+        EXCEPTION
+          WHEN duplicate_column THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE usage_logs ADD COLUMN anchor_hash TEXT;
+        EXCEPTION
+          WHEN duplicate_column THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE usage_logs ADD COLUMN chain_verified BOOLEAN DEFAULT FALSE;
+        EXCEPTION
+          WHEN duplicate_column THEN NULL;
+        END;
       END $$;
     `);
 
@@ -89,6 +120,22 @@ export async function initDatabase() {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS usage_logs_created_at_idx
       ON usage_logs(created_at DESC)
+    `);
+
+    // Create indexes for nonce chain queries
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS usage_logs_tx_nonce_idx
+      ON usage_logs(tx_nonce)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS usage_logs_block_number_idx
+      ON usage_logs(block_number)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS usage_logs_anchor_hash_idx
+      ON usage_logs(anchor_hash) WHERE anchor_hash IS NOT NULL
     `);
 
     console.log('✅ Database tables initialized');

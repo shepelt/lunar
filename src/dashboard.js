@@ -1,7 +1,8 @@
 import express from 'express';
 import { nanoid } from 'nanoid';
 import { pool } from './db.js';
-import { isBlockchainEnabled, getBlockchainStats, logToBlockchain } from './blockchain.js';
+// Use nonce chain implementation
+import { isBlockchainEnabled, getBlockchainStats, logToBlockchain, verifyLog } from './blockchain-chain.js';
 
 const router = express.Router();
 
@@ -763,6 +764,62 @@ router.get('/info', async (req, res) => {
   `;
   res.setHeader('Content-Type', 'text/html');
   res.send(html);
+});
+
+// Verify a log entry in the nonce chain
+router.get('/logs/:logId/verify', async (req, res) => {
+  try {
+    const { logId } = req.params;
+
+    if (!isBlockchainEnabled()) {
+      return res.status(503).json({ error: 'Blockchain not configured' });
+    }
+
+    const result = await verifyLog(logId);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get nonce chain status
+router.get('/chain/status', async (req, res) => {
+  try {
+    if (!isBlockchainEnabled()) {
+      return res.status(503).json({ error: 'Blockchain not configured' });
+    }
+
+    const stats = await getBlockchainStats();
+
+    // Get recent logs with chain data
+    const recentLogs = await pool.query(`
+      SELECT
+        id, tx_nonce, prev_tx_nonce, anchor_hash,
+        blockchain_tx_hash, block_number, chain_verified,
+        created_at
+      FROM usage_logs
+      WHERE tx_nonce IS NOT NULL
+      ORDER BY tx_nonce DESC
+      LIMIT 10
+    `);
+
+    res.json({
+      stats,
+      recentLogs: recentLogs.rows.map(row => ({
+        id: row.id,
+        nonce: row.tx_nonce,
+        prevNonce: row.prev_tx_nonce,
+        isAnchor: !!row.anchor_hash,
+        anchorHash: row.anchor_hash,
+        txHash: row.blockchain_tx_hash,
+        blockNumber: row.block_number,
+        verified: row.chain_verified,
+        createdAt: row.created_at
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 export default router;

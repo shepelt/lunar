@@ -24,12 +24,10 @@
 - TASK-17: HTTP Basic Auth for admin dashboard and API protection
 - TASK-18: Removed backend port 5872 exposure (backend only accessible via Kong)
 - TASK-19: Docker-based integration test suite with blockchain support
+- TASK-20: Renamed "Lunar GW" to "Noosphere Router" throughout the project
+- TASK-21: Nonce-based audit chain optimization (96.7% cost reduction, 0.0000021 ETH/log)
 
 ## In Progress
-
-
-## Done (v0.2)
-- TASK-20: Renamed "Lunar GW" to "Noosphere Router" throughout the project
 
 ## Fix Me
 - Upstream error handling (timeout, etc)

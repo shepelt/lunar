@@ -2,7 +2,8 @@ import express from 'express';
 import crypto from 'crypto';
 import zlib from 'zlib';
 import { pool } from './db.js';
-import { logToBlockchain } from './blockchain.js';
+// Use nonce chain implementation
+import { logToBlockchain, verifyLog } from './blockchain-chain.js';
 
 const router = express.Router();
 

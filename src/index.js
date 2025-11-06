@@ -1,7 +1,8 @@
 import dotenv from 'dotenv';
 import app from './app.js';
 import { initDatabase, testConnection } from './db.js';
-import { initBlockchain } from './blockchain.js';
+// Use nonce chain implementation
+import { initBlockchain } from './blockchain-chain.js';
 
 dotenv.config();
 
