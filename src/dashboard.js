@@ -604,7 +604,7 @@ router.post('/llm-proxy', async (req, res) => {
         messages: [
           { role: 'user', content: prompt }
         ],
-        ...(max_tokens && { max_tokens })  // Only include if provided
+        max_tokens: max_tokens || 1024  // Default to 1024 if not provided (required by Kong ai-proxy)
       })
     });
 

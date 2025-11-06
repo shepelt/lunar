@@ -1,6 +1,5 @@
 import express from 'express';
 import crypto from 'crypto';
-import zlib from 'zlib';
 import { pool } from './db.js';
 // Use nonce chain implementation
 import { logToBlockchain, verifyLog } from './blockchain-chain.js';
@@ -47,7 +46,7 @@ router.post('/quota/log', async (req, res) => {
       model,
       status,
       request_body,
-      response_body_compressed
+      response_body_compressed  // base64-encoded response body (not gzipped)
     } = req.body;
 
     let prompt_tokens = 0;
@@ -73,25 +72,12 @@ router.post('/quota/log', async (req, res) => {
       }
     }
 
-    // Decompress and extract usage data if response body provided
+    // Extract usage data from response body if provided
     if (response_body_compressed) {
       try {
-        // Decode from base64
-        const compressedBuffer = Buffer.from(response_body_compressed, 'base64');
-
-        // Try to decompress with gzip, but handle both gzipped and non-gzipped data
-        let textBuffer = compressedBuffer;
-        try {
-          // Check if it's actually gzipped by looking at the magic number (1f 8b)
-          if (compressedBuffer.length >= 2 && compressedBuffer[0] === 0x1f && compressedBuffer[1] === 0x8b) {
-            textBuffer = zlib.gunzipSync(compressedBuffer);
-          }
-        } catch (decompressError) {
-          console.warn('Gzip decompression failed:', decompressError.message);
-          textBuffer = compressedBuffer;
-        }
-
-        responseText = textBuffer.toString('utf8');
+        // Decode from base64 (plain text, not gzipped)
+        const responseBuffer = Buffer.from(response_body_compressed, 'base64');
+        responseText = responseBuffer.toString('utf8');
 
         // Calculate SHA256 hash of response
         responseHash = crypto.createHash('sha256').update(responseText).digest('hex');
@@ -99,22 +85,30 @@ router.post('/quota/log', async (req, res) => {
         // Parse response - handle both streaming (SSE) and non-streaming formats
         let responseData = null;
 
-        // Check if response is in SSE format (starts with "data: ")
-        if (responseText.trim().startsWith('data: ')) {
+        // Check if response is in SSE format (starts with "event:" or "data: ")
+        if (responseText.trim().startsWith('event:') || responseText.trim().startsWith('data: ')) {
           // Parse SSE format - extract the last data chunk that contains usage info
           const lines = responseText.split('\n');
+
           for (let i = lines.length - 1; i >= 0; i--) {
             const line = lines[i].trim();
             if (line.startsWith('data: ') && line !== 'data: [DONE]') {
               try {
                 const jsonStr = line.substring(6); // Remove "data: " prefix
                 const chunk = JSON.parse(jsonStr);
-                if (chunk.usage) {
+
+                // For Anthropic: look for message_delta with usage
+                if (provider === 'anthropic' && chunk.type === 'message_delta' && chunk.usage) {
+                  responseData = chunk;
+                  break;
+                }
+                // For OpenAI and others: look for usage directly in chunk
+                else if (chunk.usage) {
                   responseData = chunk;
                   break;
                 }
               } catch (e) {
-                // Skip invalid JSON lines
+                // Skip invalid JSON
               }
             }
           }
@@ -129,26 +123,83 @@ router.post('/quota/log', async (req, res) => {
 
         // Extract usage data if found
         if (responseData && responseData.usage) {
-          prompt_tokens = responseData.usage.prompt_tokens || 0;
-          completion_tokens = responseData.usage.completion_tokens || 0;
-          total_tokens = responseData.usage.total_tokens || 0;
+          // Handle both OpenAI and Anthropic formats
+          // OpenAI: prompt_tokens, completion_tokens, total_tokens
+          // Anthropic: input_tokens, output_tokens
+          prompt_tokens = responseData.usage.prompt_tokens || responseData.usage.input_tokens || 0;
+          completion_tokens = responseData.usage.completion_tokens || responseData.usage.output_tokens || 0;
+          total_tokens = responseData.usage.total_tokens || (prompt_tokens + completion_tokens);
 
           // Calculate cost based on provider
           if (provider === 'ollama') {
             // Local models are free (on-premise inference)
             cost = 0;
+          } else if (provider === 'anthropic') {
+            // Claude Sonnet 4 pricing (as of 2025)
+            // Input: $3.00 per 1M tokens, Output: $15.00 per 1M tokens
+            cost = (prompt_tokens * 0.000003) + (completion_tokens * 0.000015);
           } else {
-            // GPT-5 pricing for OpenAI
+            // GPT-5 pricing for OpenAI (default)
             // Input: $1.25 per 1M tokens, Output: $10.00 per 1M tokens
             cost = (prompt_tokens * 0.00000125) + (completion_tokens * 0.00001);
           }
         } else {
-          console.warn('No usage data in response');
+          console.warn('No usage data in response - estimating from response body size');
+          // Estimate tokens from response body when actual usage data is missing
+          // This handles cases where streaming requests are terminated early
+
+          // Rough estimation: 1 token ≈ 4 characters (conservative estimate)
+          // For streaming, we have the captured response body text
+          if (responseText) {
+            completion_tokens = Math.ceil(responseText.length / 4);
+          }
+
+          // Estimate prompt tokens from request body if available
+          if (requestText) {
+            try {
+              const reqData = JSON.parse(requestText);
+              if (reqData.messages) {
+                // Estimate from messages content
+                const messageText = reqData.messages.map(m => m.content).join(' ');
+                prompt_tokens = Math.ceil(messageText.length / 4);
+              } else if (reqData.prompt) {
+                // OpenAI legacy format
+                prompt_tokens = Math.ceil(reqData.prompt.length / 4);
+              }
+            } catch (e) {
+              // If can't parse, use conservative estimate
+              prompt_tokens = Math.ceil(requestText.length / 6);
+            }
+          }
+
+          total_tokens = prompt_tokens + completion_tokens;
+
+          // Calculate cost with estimated tokens
+          if (provider === 'anthropic') {
+            cost = (prompt_tokens * 0.000003) + (completion_tokens * 0.000015);
+          } else {
+            // OpenAI pricing
+            cost = (prompt_tokens * 0.00000125) + (completion_tokens * 0.00001);
+          }
+
+          console.log(`Estimated usage - input: ${prompt_tokens}, output: ${completion_tokens}, cost: ${cost}`);
         }
       } catch (parseError) {
         console.error('Failed to parse response:', parseError.message);
-        // Continue with zero tokens if parsing fails
+        return res.status(500).json({
+          error: 'Failed to parse response',
+          message: parseError.message
+        });
       }
+    }
+
+    // Validate we have at least some token count
+    if (prompt_tokens === 0 && completion_tokens === 0 && status === 'success') {
+      console.warn('Unable to estimate tokens - no request or response data');
+      return res.status(400).json({
+        error: 'Invalid usage data',
+        message: 'Cannot log successful request with zero tokens - no data to estimate from'
+      });
     }
 
     // Insert usage log

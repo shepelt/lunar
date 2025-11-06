@@ -181,6 +181,140 @@ services:
                 headers:
                   - X-Kong-LLM-Model:ollama/${OLLAMA_MODEL_NAME}
 
+  # Native Anthropic Messages API - direct Kong proxy to Anthropic
+  - name: anthropic-gateway
+    url: https://api.anthropic.com
+    connect_timeout: 1800000
+    write_timeout: 1800000
+    read_timeout: 1800000
+    routes:
+      - name: anthropic-count-tokens
+        paths:
+          - /v1/messages/count_tokens
+        strip_path: false
+        preserve_host: false
+        regex_priority: 101  # Higher priority than /v1/messages
+        protocols:
+          - http
+          - https
+        plugins:
+          - name: cors
+            config:
+              origins:
+                - "*"
+              methods:
+                - POST
+                - OPTIONS
+              headers:
+                - Accept
+                - Content-Type
+                - Authorization
+                - x-api-key
+                - anthropic-version
+              exposed_headers:
+                - X-Auth-Token
+              credentials: true
+              max_age: 3600
+          - name: pre-function
+            config:
+              access:
+                - |
+                  -- Extract API key from x-api-key or Authorization header
+                  local api_key = ngx.var.http_x_api_key
+
+                  -- If no x-api-key, try Authorization header (Bearer token)
+                  if not api_key then
+                    local auth_header = ngx.var.http_authorization
+                    if auth_header and string.match(auth_header, "^Bearer%s+") then
+                      api_key = string.match(auth_header, "^Bearer%s+(.+)$")
+                    end
+                  end
+
+                  -- Set as apikey for key-auth plugin
+                  if api_key then
+                    ngx.req.set_header("apikey", api_key)
+                  end
+
+                  -- Replace user's API key with our Anthropic API key for upstream
+                  -- Note: Environment variable substitution happens at deck sync time
+                  kong.service.request.set_header("x-api-key", "${ANTHROPIC_API_KEY}")
+          - name: key-auth
+            config:
+              key_names:
+                - apikey
+                - x-api-key
+              key_in_header: true
+              key_in_query: false
+              hide_credentials: false
+          # Note: noosphere-router plugin NOT enabled for count_tokens
+          # This endpoint doesn't consume tokens, so no quota/logging needed
+      - name: anthropic-messages
+        paths:
+          - /v1/messages
+        strip_path: false
+        preserve_host: false
+        regex_priority: 100  # Higher priority to match before landing page
+        protocols:
+          - http
+          - https
+        plugins:
+          - name: cors
+            config:
+              origins:
+                - "*"
+              methods:
+                - POST
+                - OPTIONS
+              headers:
+                - Accept
+                - Content-Type
+                - Authorization
+                - x-api-key
+                - anthropic-version
+              exposed_headers:
+                - X-Auth-Token
+              credentials: true
+              max_age: 3600
+          - name: pre-function
+            config:
+              access:
+                - |
+                  -- Extract API key from x-api-key or Authorization header
+                  local api_key = ngx.var.http_x_api_key
+
+                  -- If no x-api-key, try Authorization header (Bearer token)
+                  if not api_key then
+                    local auth_header = ngx.var.http_authorization
+                    if auth_header and string.match(auth_header, "^Bearer%s+") then
+                      api_key = string.match(auth_header, "^Bearer%s+(.+)$")
+                    end
+                  end
+
+                  -- Set as apikey for key-auth plugin
+                  if api_key then
+                    ngx.req.set_header("apikey", api_key)
+                  end
+
+                  -- Replace user's API key with our Anthropic API key for upstream
+                  -- Note: Environment variable substitution happens at deck sync time
+                  kong.service.request.set_header("x-api-key", "${ANTHROPIC_API_KEY}")
+              header_filter:
+                - |
+                  -- Set X-Kong-LLM-Model header for usage logging (with default model)
+                  kong.response.set_header("X-Kong-LLM-Model", "anthropic/claude-sonnet-4")
+          - name: key-auth
+            config:
+              key_names:
+                - apikey
+                - x-api-key
+              key_in_header: true
+              key_in_query: false
+              hide_credentials: false
+          - name: noosphere-router
+            config:
+              backend_url: ${BACKEND_URL}
+              enable_routing: false  # No routing needed for native Anthropic endpoint
+
   # Public unified endpoint - routes to backend for smart routing
   - name: llm-unified-gateway
     url: ${BACKEND_URL}  # Backend Express server

@@ -43,12 +43,14 @@
       <p class="text-xl opacity-90">LLM Usage & Billing Analytics</p>
     </header>
 
-    <!-- Unified Endpoint -->
+    <!-- API Endpoints -->
     <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
-      <h2 class="text-2xl font-bold mb-4 text-gray-800">🔌 API Endpoint</h2>
-      <div class="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-6 border border-purple-200">
+      <h2 class="text-2xl font-bold mb-4 text-gray-800">🔌 API Endpoints</h2>
+
+      <!-- OpenAI Compatible Endpoint -->
+      <div class="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-6 border border-purple-200 mb-4">
         <div class="mb-4">
-          <div class="text-sm text-gray-600 uppercase tracking-wide mb-2">Unified Endpoint (OpenAI Compatible)</div>
+          <div class="text-sm text-gray-600 uppercase tracking-wide mb-2">OpenAI Compatible Format</div>
           <div class="flex items-center justify-between bg-white rounded p-3 border border-gray-200">
             <code id="unified-endpoint" class="text-sm font-mono text-purple-700 font-medium"></code>
             <button
@@ -65,6 +67,28 @@
             Examples: <code class="bg-white px-1 py-0.5 rounded">openai/gpt-4o</code>,
             <code class="bg-white px-1 py-0.5 rounded">anthropic/claude-sonnet-4</code>,
             <code class="bg-white px-1 py-0.5 rounded">ollama/gpt-oss:120b</code>
+          </div>
+        </div>
+      </div>
+
+      <!-- Native Anthropic Endpoint -->
+      <div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg p-6 border border-indigo-200">
+        <div class="mb-4">
+          <div class="text-sm text-gray-600 uppercase tracking-wide mb-2">Native Anthropic Format (Claude Code)</div>
+          <div class="flex items-center justify-between bg-white rounded p-3 border border-gray-200">
+            <code id="anthropic-endpoint" class="text-sm font-mono text-indigo-700 font-medium"></code>
+            <button
+              onclick="copyToClipboard(document.getElementById('anthropic-endpoint').textContent, this)"
+              class="ml-4 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded transition-colors"
+            >
+              📋 Copy
+            </button>
+          </div>
+        </div>
+        <div class="text-sm text-gray-600 space-y-1">
+          <div>✓ Compatible with Claude Code and Anthropic SDK</div>
+          <div class="ml-4 text-xs text-gray-500">
+            Use: <code class="bg-white px-1 py-0.5 rounded">export ANTHROPIC_BASE_URL=&lt;endpoint&gt;</code>
           </div>
         </div>
       </div>

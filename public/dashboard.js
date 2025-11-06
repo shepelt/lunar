@@ -266,10 +266,12 @@ function updateBlockchainStatus(config) {
 function renderProvidersCombined(stats, config) {
   const container = document.getElementById('providers-combined');
 
-  // Update unified endpoint display
+  // Update endpoint displays
   const baseUrl = config.noosphere_router_endpoint_url || 'http://localhost:8000';
   const unifiedEndpoint = `${baseUrl}/llm/v1/chat/completions`;
+  const anthropicEndpoint = `${baseUrl}/v1/messages`;
   document.getElementById('unified-endpoint').textContent = unifiedEndpoint;
+  document.getElementById('anthropic-endpoint').textContent = anthropicEndpoint;
 
   // Provider configurations
   const providers = {

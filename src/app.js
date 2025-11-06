@@ -60,6 +60,7 @@ app.use('/api', async (req, res, next) => {
 app.use('/api', backendRouter);  // Kong plugin routes
 app.use('/api', dashboardRouter);  // Dashboard/admin routes
 app.use('/llm', llmRouter);  // Unified LLM gateway + legacy /llm endpoint
+// Note: /v1/messages (Anthropic API) is handled directly by Kong proxy
 
 // Helper function for testing - clear storage
 export async function clearStorage() {
