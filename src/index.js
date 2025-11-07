@@ -17,14 +17,14 @@ async function start() {
     await initDatabase();
 
     // Initialize blockchain (optional - won't fail if not configured)
-    const blockchainEnabled = initBlockchain();
+    const blockchainInfo = await initBlockchain();
 
     // Start server
     app.listen(PORT, () => {
       console.log(`🌙 Noosphere Router Backend running on http://localhost:${PORT}`);
       console.log(`📊 Storage: PostgreSQL (persistent)`);
-      if (blockchainEnabled) {
-        console.log(`⛓️  Blockchain: HPP Sepolia (Merkle batch audit logs)`);
+      if (blockchainInfo) {
+        console.log(`⛓️  Blockchain: ${blockchainInfo.network} (Merkle batch audit logs)`);
       }
     });
   } catch (error) {

@@ -498,10 +498,10 @@ class MerkleAuditChain {
 const merkleAuditChain = new MerkleAuditChain();
 
 // Initialize blockchain connection
-export function initBlockchain() {
+export async function initBlockchain() {
   if (!PRIVATE_KEY || !CONTRACT_ADDRESS) {
     console.warn('⚠️  Blockchain not configured. Set BLOCKCHAIN_PRIVATE_KEY and BLOCKCHAIN_CONTRACT_ADDRESS in .env');
-    return false;
+    return null;
   }
 
   try {
@@ -517,6 +517,12 @@ export function initBlockchain() {
     // Create contract instance
     contract = new web3.eth.Contract(deployment.abi, CONTRACT_ADDRESS);
 
+    // Detect network name from chain ID
+    const chainId = await web3.eth.getChainId();
+    const networkName = chainId === 190415n ? 'HPP Mainnet' :
+                        chainId === 181228n ? 'HPP Sepolia' :
+                        `Chain ${chainId}`;
+
     console.log('✅ Blockchain initialized (Merkle Batch Mode)');
     console.log('   Contract:', CONTRACT_ADDRESS);
     console.log('   Account:', account.address);
@@ -530,10 +536,10 @@ export function initBlockchain() {
       console.error('Failed to resume chain:', err.message);
     });
 
-    return true;
+    return { network: networkName };
   } catch (error) {
     console.error('❌ Failed to initialize blockchain:', error.message);
-    return false;
+    return null;
   }
 }
 
@@ -580,12 +586,17 @@ export async function getBlockchainStats() {
   const todayStats = await merkleAuditChain.getTodayStats();
 
   // Estimate remaining transactions based on gas costs
-  // Using actual HPP Sepolia costs from testing
   const regularBatchGas = 250000;  // Average gas for batch tx (needs to be measured)
   const gasPrice = await web3.eth.getGasPrice();
 
   const avgCostPerBatch = web3.utils.fromWei((BigInt(regularBatchGas) * BigInt(gasPrice)).toString(), 'ether');
   const estimatedTxsRemaining = Math.floor(parseFloat(balanceEth) / parseFloat(avgCostPerBatch));
+
+  // Detect network name from chain ID
+  const chainId = await web3.eth.getChainId();
+  const networkName = chainId === 190415n ? 'HPP Mainnet' :
+                      chainId === 181228n ? 'HPP Sepolia' :
+                      `Chain ${chainId}`;
 
   return {
     totalBatches: totalBatches.toString(),
@@ -594,7 +605,7 @@ export async function getBlockchainStats() {
     walletAddress: account.address,
     balance: balanceEth,
     estimatedTxsRemaining,
-    network: 'HPP Sepolia',
+    network: networkName,
     database: {
       totalBatches: dbStats.rows[0].total_batches,
       totalLogs: dbStats.rows[0].total_logs,
