@@ -108,6 +108,22 @@ export async function initDatabase() {
         EXCEPTION
           WHEN duplicate_column THEN NULL;
         END;
+        -- Merkle batch columns
+        BEGIN
+          ALTER TABLE usage_logs ADD COLUMN batch_id BIGINT;
+        EXCEPTION
+          WHEN duplicate_column THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE usage_logs ADD COLUMN merkle_proof JSONB;
+        EXCEPTION
+          WHEN duplicate_column THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE usage_logs ADD COLUMN leaf_hash TEXT;
+        EXCEPTION
+          WHEN duplicate_column THEN NULL;
+        END;
       END $$;
     `);
 
@@ -136,6 +152,46 @@ export async function initDatabase() {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS usage_logs_anchor_hash_idx
       ON usage_logs(anchor_hash) WHERE anchor_hash IS NOT NULL
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS usage_logs_batch_id_idx
+      ON usage_logs(batch_id) WHERE batch_id IS NOT NULL
+    `);
+
+    // Create blockchain_batches table for Merkle batching
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS blockchain_batches (
+        id BIGSERIAL PRIMARY KEY,
+        merkle_root TEXT NOT NULL,
+        chain_hash TEXT NOT NULL,
+        tx_nonce BIGINT NOT NULL,
+        prev_tx_nonce BIGINT NOT NULL,
+        blockchain_tx_hash TEXT NOT NULL,
+        block_number BIGINT NOT NULL,
+        log_count INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS blockchain_batches_tx_nonce_idx
+      ON blockchain_batches(tx_nonce)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS blockchain_batches_created_at_idx
+      ON blockchain_batches(created_at DESC)
+    `);
+
+    // Create blockchain_budget table for daily transaction tracking
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS blockchain_budget (
+        period DATE PRIMARY KEY,
+        tx_count INTEGER DEFAULT 0,
+        request_count INTEGER DEFAULT 0,
+        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
     `);
 
     console.log('✅ Database tables initialized');

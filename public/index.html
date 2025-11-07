@@ -113,7 +113,7 @@
           <div class="text-sm text-gray-600 uppercase tracking-wide mb-2 mt-4">Balance</div>
           <div class="text-2xl font-bold text-brand-dark" id="wallet-balance">-</div>
           <div class="text-xs text-gray-500 mt-1">
-            ~<span id="estimated-logs-remaining" class="font-semibold text-gray-700">-</span> logs remaining
+            ~<span id="estimated-txs-remaining" class="font-semibold text-gray-700">-</span> txs remaining
           </div>
         </div>
 
@@ -134,6 +134,47 @@
             <span id="queue-length" class="font-semibold">-</span> pending
             <span class="text-gray-400">•</span>
             <span id="queue-status" class="font-semibold">-</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Merkle Batching Stats (second row) -->
+      <div id="merkle-batching-section" class="grid grid-cols-1 md:grid-cols-4 gap-6 mt-6 hidden">
+        <!-- Total Batches -->
+        <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
+          <div class="text-sm text-gray-600 uppercase tracking-wide mb-2">Total Batches</div>
+          <div class="text-3xl font-bold text-brand-dark" id="total-batches">-</div>
+          <div class="text-xs text-gray-500 mt-1" id="batch-mode-label">Merkle Batch Mode</div>
+        </div>
+
+        <!-- Batch Configuration -->
+        <div class="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
+          <div class="text-sm text-gray-600 uppercase tracking-wide mb-2">Batch Config</div>
+          <div class="text-lg font-semibold text-gray-800">
+            <span id="batch-size">-</span> logs
+          </div>
+          <div class="text-xs text-gray-500 mt-1">
+            Max <span id="batch-interval">-</span>s wait
+          </div>
+        </div>
+
+        <!-- Daily Budget -->
+        <div class="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-4 border border-purple-200">
+          <div class="text-sm text-gray-600 uppercase tracking-wide mb-2">Today's Usage</div>
+          <div class="text-2xl font-bold text-gray-800">
+            <span id="today-tx-count">-</span><span class="text-gray-400 text-base font-normal"> / </span><span id="today-tx-limit" class="text-gray-600">-</span>
+          </div>
+          <div class="text-xs text-gray-500 mt-1">
+            <span id="today-request-count">-</span> requests logged
+          </div>
+        </div>
+
+        <!-- Adaptive Batching -->
+        <div class="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-lg p-4 border border-yellow-200">
+          <div class="text-sm text-gray-600 uppercase tracking-wide mb-2">Adaptive Batching</div>
+          <div class="text-lg font-semibold" id="adaptive-status">-</div>
+          <div class="text-xs text-gray-500 mt-1">
+            Current: <span id="current-batch-size" class="font-semibold text-gray-700">-</span> logs/batch
           </div>
         </div>
       </div>
@@ -349,6 +390,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
-  <script src="dashboard.js"></script>
+  <script src="dashboard.js?v=2"></script>
 </body>
 </html>

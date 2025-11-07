@@ -1,8 +1,8 @@
 import express from 'express';
 import crypto from 'crypto';
 import { pool } from './db.js';
-// Use nonce chain implementation
-import { logToBlockchain, verifyLog } from './blockchain-chain.js';
+// Use Merkle batch implementation
+import { logToBlockchain, verifyLog } from './blockchain-merkle.js';
 
 const router = express.Router();
 
@@ -250,6 +250,102 @@ router.post('/quota/log', async (req, res) => {
     });
   } catch (error) {
     console.error('Error logging usage:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Verify a log entry (Merkle proof verification)
+router.get('/verify/:log_id', async (req, res) => {
+  try {
+    const { log_id } = req.params;
+
+    const result = await verifyLog(log_id);
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error verifying log:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get blockchain statistics
+router.get('/blockchain/stats', async (req, res) => {
+  try {
+    const { getBlockchainStats } = await import('./blockchain-merkle.js');
+    const stats = await getBlockchainStats();
+    res.json(stats);
+  } catch (error) {
+    console.error('Error getting blockchain stats:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Force flush current batch (admin endpoint)
+router.post('/blockchain/flush', async (req, res) => {
+  try {
+    const { flushBatch } = await import('./blockchain-merkle.js');
+    await flushBatch();
+    res.json({ success: true, message: 'Batch flushed' });
+  } catch (error) {
+    console.error('Error flushing batch:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get batch information
+router.get('/blockchain/batch/:batch_id', async (req, res) => {
+  try {
+    const { batch_id } = req.params;
+
+    const result = await pool.query(`
+      SELECT
+        bb.*,
+        COUNT(ul.id) as actual_log_count
+      FROM blockchain_batches bb
+      LEFT JOIN usage_logs ul ON ul.batch_id = bb.id
+      WHERE bb.id = $1
+      GROUP BY bb.id
+    `, [batch_id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Batch not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error getting batch:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get logs in a batch
+router.get('/blockchain/batch/:batch_id/logs', async (req, res) => {
+  try {
+    const { batch_id } = req.params;
+
+    const result = await pool.query(`
+      SELECT
+        id,
+        consumer_id,
+        provider,
+        model,
+        prompt_tokens,
+        completion_tokens,
+        cost,
+        leaf_hash,
+        created_at
+      FROM usage_logs
+      WHERE batch_id = $1
+      ORDER BY created_at ASC
+    `, [batch_id]);
+
+    res.json({
+      batch_id,
+      log_count: result.rows.length,
+      logs: result.rows
+    });
+  } catch (error) {
+    console.error('Error getting batch logs:', error);
     res.status(500).json({ error: error.message });
   }
 });

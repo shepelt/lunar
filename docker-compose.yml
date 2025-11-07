@@ -83,6 +83,10 @@ services:
       BLOCKCHAIN_PRIVATE_KEY: ${BLOCKCHAIN_PRIVATE_KEY:-}
       BLOCKCHAIN_RPC_URL: ${BLOCKCHAIN_RPC_URL:-}
       BLOCKCHAIN_CONTRACT_ADDRESS: ${BLOCKCHAIN_CONTRACT_ADDRESS:-}
+      BLOCKCHAIN_BATCH_SIZE: ${BLOCKCHAIN_BATCH_SIZE:-50}
+      BLOCKCHAIN_BATCH_INTERVAL_MS: ${BLOCKCHAIN_BATCH_INTERVAL_MS:-10000}
+      BLOCKCHAIN_MAX_TXS_PER_DAY: ${BLOCKCHAIN_MAX_TXS_PER_DAY:-2000}
+      BLOCKCHAIN_ADAPTIVE_BATCHING: ${BLOCKCHAIN_ADAPTIVE_BATCHING:-true}
       STORE_FULL_REQUEST_RESPONSE: ${STORE_FULL_REQUEST_RESPONSE:-false}
     ports:
       # - "5872:5872"  # Backend/Dashboard (internal only - access via Kong at /admin)
@@ -92,6 +96,7 @@ services:
       # Mount src for hot reload during development (comment out for production)
       - ./src:/app/src:ro
       - ./public:/app/public:ro
+      - ./contracts/deployed-merkle.json:/app/contracts/deployed-merkle.json:ro
       - ./kong-plugins:/usr/local/kong/custom-plugins:ro
       - ./kong/kong.conf:/etc/kong/kong.conf:ro
     networks:

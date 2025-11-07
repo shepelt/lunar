@@ -1,8 +1,8 @@
 import dotenv from 'dotenv';
 import app from './app.js';
 import { initDatabase, testConnection } from './db.js';
-// Use nonce chain implementation
-import { initBlockchain } from './blockchain-chain.js';
+// Use Merkle batch implementation
+import { initBlockchain } from './blockchain-merkle.js';
 
 dotenv.config();
 
@@ -21,10 +21,10 @@ async function start() {
 
     // Start server
     app.listen(PORT, () => {
-      console.log(`🌙 Lunar Gateway Backend running on http://localhost:${PORT}`);
+      console.log(`🌙 Noosphere Router Backend running on http://localhost:${PORT}`);
       console.log(`📊 Storage: PostgreSQL (persistent)`);
       if (blockchainEnabled) {
-        console.log(`⛓️  Blockchain: HPP Sepolia (immutable audit logs)`);
+        console.log(`⛓️  Blockchain: HPP Sepolia (Merkle batch audit logs)`);
       }
     });
   } catch (error) {

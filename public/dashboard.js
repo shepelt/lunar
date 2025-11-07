@@ -244,9 +244,9 @@ function updateBlockchainStatus(config) {
   document.getElementById('wallet-balance').textContent = stats.balance
     ? `${parseFloat(stats.balance).toFixed(4)} ETH`
     : '-';
-  document.getElementById('estimated-logs-remaining').textContent =
-    stats.estimatedLogsRemaining !== undefined
-      ? formatNumber(stats.estimatedLogsRemaining)
+  document.getElementById('estimated-txs-remaining').textContent =
+    stats.estimatedTxsRemaining !== undefined
+      ? formatNumber(stats.estimatedTxsRemaining)
       : '-';
 
   // Update contract info
@@ -254,12 +254,55 @@ function updateBlockchainStatus(config) {
   document.getElementById('blockchain-network').textContent = stats.network || '-';
 
   // Update stats
-  document.getElementById('total-blockchain-logs').textContent = formatNumber(parseInt(stats.totalLogs) || 0);
+  const totalLogs = stats.database ? parseInt(stats.database.totalLogs) : parseInt(stats.totalLogs);
+  document.getElementById('total-blockchain-logs').textContent = formatNumber(totalLogs || 0);
 
   // Update queue info
   const queue = stats.queue || {};
   document.getElementById('queue-length').textContent = queue.queueLength || 0;
   document.getElementById('queue-status').textContent = queue.processing ? 'processing' : 'idle';
+
+  // Update Merkle batching metrics (if available)
+  const merkleBatchingSection = document.getElementById('merkle-batching-section');
+  if (stats.totalBatches !== undefined && stats.queue) {
+    merkleBatchingSection.classList.remove('hidden');
+
+    // Total batches
+    document.getElementById('total-batches').textContent = formatNumber(parseInt(stats.totalBatches) || 0);
+
+    // Batch configuration
+    document.getElementById('batch-size').textContent = queue.configuredBatchSize || queue.batchSize || '-';
+    const batchIntervalSec = queue.batchInterval ? Math.round(queue.batchInterval / 1000) : '-';
+    document.getElementById('batch-interval').textContent = batchIntervalSec;
+
+    // Daily budget (today's usage)
+    if (stats.today) {
+      document.getElementById('today-tx-count').textContent = formatNumber(stats.today.tx_count || 0);
+      document.getElementById('today-tx-limit').textContent = formatNumber(queue.maxTxsPerDay || 2000);
+      document.getElementById('today-request-count').textContent = formatNumber(stats.today.request_count || 0);
+    } else {
+      document.getElementById('today-tx-count').textContent = '-';
+      document.getElementById('today-tx-limit').textContent = '-';
+      document.getElementById('today-request-count').textContent = '-';
+    }
+
+    // Adaptive batching status
+    const adaptiveEnabled = queue.adaptiveBatching !== false;
+    const adaptiveStatusEl = document.getElementById('adaptive-status');
+    if (adaptiveEnabled) {
+      adaptiveStatusEl.textContent = '✅ Enabled';
+      adaptiveStatusEl.className = 'text-lg font-semibold text-green-600';
+    } else {
+      adaptiveStatusEl.textContent = '⚪ Disabled';
+      adaptiveStatusEl.className = 'text-lg font-semibold text-gray-500';
+    }
+
+    // Current batch size (may be different from configured if adaptive)
+    const currentBatchSize = queue.currentBatchSize || queue.configuredBatchSize || queue.batchSize || '-';
+    document.getElementById('current-batch-size').textContent = currentBatchSize;
+  } else {
+    merkleBatchingSection.classList.add('hidden');
+  }
 }
 
 // Render combined provider info (usage stats only)

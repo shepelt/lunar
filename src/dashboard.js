@@ -1,8 +1,8 @@
 import express from 'express';
 import { nanoid } from 'nanoid';
 import { pool } from './db.js';
-// Use nonce chain implementation
-import { isBlockchainEnabled, getBlockchainStats, logToBlockchain, verifyLog } from './blockchain-chain.js';
+// Use Merkle batch implementation
+import { isBlockchainEnabled, getBlockchainStats, logToBlockchain, verifyLog } from './blockchain-merkle.js';
 
 const router = express.Router();
 
@@ -356,7 +356,9 @@ router.get('/config', async (req, res) => {
     // Include blockchain stats if enabled
     if (blockchain_enabled) {
       try {
-        response.blockchain_stats = await getBlockchainStats();
+        const stats = await getBlockchainStats();
+        console.log('[DEBUG] Blockchain stats:', JSON.stringify(stats, null, 2));
+        response.blockchain_stats = stats;
       } catch (error) {
         console.error('Failed to get blockchain stats:', error.message);
       }
