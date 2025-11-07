@@ -26,6 +26,7 @@
 - TASK-19: Docker-based integration test suite with blockchain support
 - TASK-20: Renamed "Lunar GW" to "Noosphere Router" throughout the project
 - TASK-21: Nonce-based audit chain optimization (96.7% cost reduction, 0.0000021 ETH/log)
+- TASK-22: Merkle tree batching with adaptive flow control (50 logs/batch, 10s interval, 2000 tx/day budget)
 
 ## In Progress
 
