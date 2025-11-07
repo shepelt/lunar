@@ -1,5 +1,7 @@
 // Dashboard state
 let refreshInterval;
+let blockchainExplorerUrl = 'https://sepolia-explorer.hpp.io'; // Default, will be updated from backend
+let blockchainRpcUrl = 'https://sepolia.hpp.io'; // Default, will be updated from backend
 
 // Copy to clipboard fallback (works without HTTPS)
 function copyToClipboardFallback(text, button) {
@@ -184,7 +186,7 @@ function renderRequestsTable(requests) {
     // Blockchain badge
     let blockchainCell;
     if (request.blockchain_tx_hash) {
-      const explorerUrl = `https://sepolia-explorer.hpp.io/tx/${request.blockchain_tx_hash}`;
+      const explorerUrl = `${blockchainExplorerUrl}/tx/${request.blockchain_tx_hash}`;
       blockchainCell = `
         <div class="relative inline-block">
           <a href="${explorerUrl}"
@@ -235,6 +237,14 @@ function updateBlockchainStatus(config) {
   }
 
   const stats = config.blockchain_stats;
+
+  // Update global explorer and RPC URLs if provided by backend
+  if (stats.explorerUrl) {
+    blockchainExplorerUrl = stats.explorerUrl;
+  }
+  if (stats.rpcUrl) {
+    blockchainRpcUrl = stats.rpcUrl;
+  }
 
   // Show section
   blockchainSection.classList.remove('hidden');
@@ -796,7 +806,7 @@ async function showBlockchainTooltip(event) {
   // Show tooltip
   tooltip.classList.remove('hidden');
 
-  const web3 = new Web3('https://sepolia.hpp.io');
+  const web3 = new Web3(blockchainRpcUrl);
 
   // Track start time for elapsed calculation
   tooltipStartTime = Date.now();

@@ -592,11 +592,20 @@ export async function getBlockchainStats() {
   const avgCostPerBatch = web3.utils.fromWei((BigInt(regularBatchGas) * BigInt(gasPrice)).toString(), 'ether');
   const estimatedTxsRemaining = Math.floor(parseFloat(balanceEth) / parseFloat(avgCostPerBatch));
 
-  // Detect network name from chain ID
+  // Detect network name and explorer URL from chain ID
   const chainId = await web3.eth.getChainId();
-  const networkName = chainId === 190415n ? 'HPP Mainnet' :
-                      chainId === 181228n ? 'HPP Sepolia' :
-                      `Chain ${chainId}`;
+  let networkName, explorerUrl;
+
+  if (chainId === 190415n) {
+    networkName = 'HPP Mainnet';
+    explorerUrl = 'https://explorer.hpp.io';
+  } else if (chainId === 181228n) {
+    networkName = 'HPP Sepolia';
+    explorerUrl = 'https://sepolia-explorer.hpp.io';
+  } else {
+    networkName = `Chain ${chainId}`;
+    explorerUrl = null;
+  }
 
   return {
     totalBatches: totalBatches.toString(),
@@ -606,6 +615,8 @@ export async function getBlockchainStats() {
     balance: balanceEth,
     estimatedTxsRemaining,
     network: networkName,
+    explorerUrl,
+    rpcUrl: RPC_URL,
     database: {
       totalBatches: dbStats.rows[0].total_batches,
       totalLogs: dbStats.rows[0].total_logs,
