@@ -44,10 +44,15 @@ router.post('/quota/log', async (req, res) => {
       consumer_id,
       provider,
       model,
-      status,
+      http_status,  // HTTP status code (200, 499, etc.)
+      status,       // Legacy: "success" or "error" (for backward compatibility)
       request_body,
       response_body_compressed  // base64-encoded response body (not gzipped)
     } = req.body;
+
+    // Use http_status if provided, otherwise fall back to legacy status field
+    const statusCode = http_status || (status === 'success' ? 200 : 500);
+    const isError = statusCode >= 400;
 
     let prompt_tokens = 0;
     let completion_tokens = 0;
@@ -193,8 +198,49 @@ router.post('/quota/log', async (req, res) => {
       }
     }
 
+    // If we still have no token counts and status is error, try to estimate from request only
+    // This handles HTTP 499 (client cancelled) where request was sent but no response received
+    if (prompt_tokens === 0 && completion_tokens === 0 && isError && requestText) {
+      console.warn('No response received (likely HTTP 499) - estimating input tokens from request');
+      try {
+        const reqData = JSON.parse(requestText);
+        if (reqData.messages) {
+          // Estimate from messages content
+          const messageText = reqData.messages.map(m => {
+            // Handle both string and array content formats
+            if (typeof m.content === 'string') {
+              return m.content;
+            } else if (Array.isArray(m.content)) {
+              // Extract text from content blocks
+              return m.content.map(block => block.text || '').join(' ');
+            }
+            return '';
+          }).join(' ');
+          prompt_tokens = Math.ceil(messageText.length / 4);
+        } else if (reqData.prompt) {
+          // OpenAI legacy format
+          prompt_tokens = Math.ceil(reqData.prompt.length / 4);
+        }
+      } catch (e) {
+        // If can't parse, use conservative estimate based on full request size
+        prompt_tokens = Math.ceil(requestText.length / 6);
+      }
+
+      total_tokens = prompt_tokens;
+
+      // Calculate cost for input tokens only (no output was generated)
+      if (provider === 'anthropic') {
+        cost = prompt_tokens * 0.000003;
+      } else {
+        // OpenAI pricing
+        cost = prompt_tokens * 0.00000125;
+      }
+
+      console.log(`Estimated input-only usage - input: ${prompt_tokens}, cost: ${cost}`);
+    }
+
     // Validate we have at least some token count
-    if (prompt_tokens === 0 && completion_tokens === 0 && status === 'success') {
+    if (prompt_tokens === 0 && completion_tokens === 0 && !isError) {
       console.warn('Unable to estimate tokens - no request or response data');
       return res.status(400).json({
         error: 'Invalid usage data',
@@ -214,7 +260,7 @@ router.post('/quota/log', async (req, res) => {
       `INSERT INTO usage_logs
         (id, consumer_id, provider, model, prompt_tokens, completion_tokens, total_tokens, cost, status, request_data, response_data, request_hash, response_hash, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())`,
-      [logId, consumer_id, provider, model, prompt_tokens, completion_tokens, total_tokens, cost, status, requestDataToStore, responseDataToStore, requestHash, responseHash]
+      [logId, consumer_id, provider, model, prompt_tokens, completion_tokens, total_tokens, cost, statusCode.toString(), requestDataToStore, responseDataToStore, requestHash, responseHash]
     );
 
     // Update consumer quota

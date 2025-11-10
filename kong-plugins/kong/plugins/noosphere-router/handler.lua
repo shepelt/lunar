@@ -202,16 +202,45 @@ function NoosphereRouterHandler:log(conf)
     response_body_compressed = table.concat(response_body_parts)
   end
 
-  -- Get model info from Kong's response headers (set by ai-proxy plugin)
-  local llm_model_header = kong.response.get_header("X-Kong-LLM-Model") or "openai/gpt-5"
+  -- Get model info from Kong's response headers (set by ai-proxy plugin or Kong config)
+  local llm_model_header = kong.response.get_header("X-Kong-LLM-Model")
+
+  -- If no header (e.g., HTTP 499), detect from route
+  if not llm_model_header then
+    local route = kong.router.get_route()
+    if route and route.name then
+      if route.name == "anthropic-messages" or route.name == "anthropic-count-tokens" then
+        llm_model_header = "anthropic/claude-sonnet-4"
+      elseif route.name == "internal-openai" then
+        llm_model_header = "openai/gpt-4o"
+      elseif route.name == "internal-ollama" then
+        llm_model_header = "ollama/llama3"
+      else
+        -- Unknown route, try to detect from request path
+        local request_path = kong.request.get_path()
+        if request_path:match("^/v1/messages") then
+          llm_model_header = "anthropic/claude-sonnet-4"
+        elseif request_path:match("^/internal/openai") then
+          llm_model_header = "openai/gpt-4o"
+        elseif request_path:match("^/internal/ollama") then
+          llm_model_header = "ollama/llama3"
+        else
+          -- Fallback to anthropic as most common
+          llm_model_header = "anthropic/claude-sonnet-4"
+          kong.log.warn("Lunar Gateway: Could not detect model from route, using fallback")
+        end
+      end
+    end
+  end
+
   local provider, model = llm_model_header:match("^([^/]+)/(.+)$")
 
   if not provider or not model then
-    provider = "openai"
-    model = "gpt-5"
+    provider = "anthropic"
+    model = "claude-sonnet-4"
   end
 
-  local status = kong.response.get_status() < 400 and "success" or "error"
+  local http_status = kong.response.get_status()
 
   -- Run logging in background timer to avoid log phase network restrictions
   local ok, err = ngx.timer.at(0, function(premature)
@@ -224,7 +253,7 @@ function NoosphereRouterHandler:log(conf)
       consumer_id = consumer_id,
       provider = provider,
       model = model,
-      status = status
+      http_status = http_status  -- Send actual HTTP status code instead of "success"/"error"
     }
 
     -- Add request body if available (base64 encoded for JSON transport)

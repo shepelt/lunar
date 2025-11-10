@@ -180,7 +180,36 @@ function renderRequestsTable(requests) {
   }
 
   tbody.innerHTML = requests.map(request => {
-    const statusColor = request.status === 'success' ? 'text-[#4949B4] font-medium' : 'text-red-600 font-medium';
+    // Parse status as HTTP code if numeric, otherwise legacy string
+    const httpCode = parseInt(request.status);
+    const isNumericStatus = !isNaN(httpCode);
+
+    // Color code based on HTTP status ranges
+    let statusColor, statusText;
+    if (isNumericStatus) {
+      if (httpCode >= 200 && httpCode < 300) {
+        // Success: green/blue
+        statusColor = 'text-[#4949B4] font-medium';
+        statusText = httpCode;
+      } else if (httpCode >= 400 && httpCode < 500) {
+        // Client errors (499 = cancelled, 404 = not found, etc.): orange/amber
+        statusColor = 'text-amber-600 font-medium';
+        statusText = httpCode;
+      } else if (httpCode >= 500) {
+        // Server errors: red
+        statusColor = 'text-red-600 font-medium';
+        statusText = httpCode;
+      } else {
+        // Other codes (3xx redirects, etc.): gray
+        statusColor = 'text-gray-600 font-medium';
+        statusText = httpCode;
+      }
+    } else {
+      // Legacy: "success" or "error"
+      statusColor = request.status === 'success' ? 'text-[#4949B4] font-medium' : 'text-red-600 font-medium';
+      statusText = request.status || 'unknown';
+    }
+
     const consumerId = request.consumer_id ? request.consumer_id.substring(0, 12) + '...' : 'N/A';
 
     // Blockchain badge
@@ -203,11 +232,19 @@ function renderRequestsTable(requests) {
           </div>
         </div>
       `;
-    } else {
+    } else if (request.response_hash && isNumericStatus && httpCode >= 200 && httpCode < 300) {
+      // Successful request with response but not yet confirmed on blockchain
       blockchainCell = `
         <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
           <span class="mr-1">⏳</span>
           <span>Confirming...</span>
+        </span>
+      `;
+    } else {
+      // Failed/incomplete request (HTTP 4xx, 5xx, etc.) - won't be logged to blockchain
+      blockchainCell = `
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600" title="Request failed or incomplete - not logged to blockchain">
+          <span>N/A</span>
         </span>
       `;
     }
@@ -220,7 +257,7 @@ function renderRequestsTable(requests) {
         <td class="px-4 py-3 text-gray-700">${request.model || 'N/A'}</td>
         <td class="px-4 py-3 text-gray-700">${formatNumber(request.total_tokens)}</td>
         <td class="px-4 py-3 font-medium text-[#4949B4]">${formatCurrency(request.cost)}</td>
-        <td class="px-4 py-3"><span class="${statusColor}">${request.status || 'unknown'}</span></td>
+        <td class="px-4 py-3"><span class="${statusColor}">${statusText}</span></td>
         <td class="px-4 py-3">${blockchainCell}</td>
       </tr>
     `;
