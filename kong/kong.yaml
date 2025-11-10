@@ -298,10 +298,8 @@ services:
                   -- Replace user's API key with our Anthropic API key for upstream
                   -- Note: Environment variable substitution happens at deck sync time
                   kong.service.request.set_header("x-api-key", "${ANTHROPIC_API_KEY}")
-              header_filter:
-                - |
-                  -- Set X-Kong-LLM-Model header for usage logging (with default model)
-                  kong.response.set_header("X-Kong-LLM-Model", "anthropic/claude-sonnet-4")
+              # Note: Model name is now extracted from request body by noosphere-router plugin
+              # This ensures accurate usage tracking for different Anthropic models
           - name: key-auth
             config:
               key_names:

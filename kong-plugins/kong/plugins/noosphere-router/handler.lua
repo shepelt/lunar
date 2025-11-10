@@ -204,16 +204,28 @@ function NoosphereRouterHandler:log(conf)
 
   -- Get model info from Kong's response headers (set by ai-proxy plugin or Kong config)
   local llm_model_header = kong.response.get_header("X-Kong-LLM-Model")
+  local route = kong.router.get_route()
+  local route_name = route and route.name or nil
+
+  -- For Anthropic native routes, extract actual model from request body
+  if (route_name == "anthropic-messages" or route_name == "anthropic-count-tokens") and request_body then
+    local body_json, decode_err = cjson.decode(request_body)
+    if body_json and body_json.model then
+      llm_model_header = "anthropic/" .. body_json.model
+      kong.log.info("Lunar Gateway: Extracted model from request body: ", llm_model_header)
+    else
+      kong.log.warn("Lunar Gateway: Failed to extract model from request body: ", decode_err or "no model field")
+    end
+  end
 
   -- If no header (e.g., HTTP 499), detect from route
   if not llm_model_header then
-    local route = kong.router.get_route()
-    if route and route.name then
-      if route.name == "anthropic-messages" or route.name == "anthropic-count-tokens" then
-        llm_model_header = "anthropic/claude-sonnet-4"
-      elseif route.name == "internal-openai" then
+    if route_name then
+      if route_name == "anthropic-messages" or route_name == "anthropic-count-tokens" then
+        llm_model_header = "anthropic/claude-sonnet-4"  -- fallback only
+      elseif route_name == "internal-openai" then
         llm_model_header = "openai/gpt-4o"
-      elseif route.name == "internal-ollama" then
+      elseif route_name == "internal-ollama" then
         llm_model_header = "ollama/llama3"
       else
         -- Unknown route, try to detect from request path
