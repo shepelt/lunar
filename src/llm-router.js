@@ -154,6 +154,23 @@ async function routeToProvider(req, res) {
     body.model = modelName;
     console.log(`LLM Router: Provider: ${provider}, Model: ${modelName}`);
 
+    // Pricing validation - reject requests for unsupported models before proxying
+    // This prevents wasting upstream API quota and ensures proper cost tracking
+    try {
+      const { getPricing } = await import('./pricing.js');
+      getPricing(provider, modelName);
+    } catch (pricingError) {
+      console.warn(`Pricing validation failed: ${pricingError.message}`);
+      return res.status(400).json({
+        error: {
+          message: pricingError.message,
+          type: 'invalid_request_error',
+          param: 'model',
+          code: 'unsupported_model'
+        }
+      });
+    }
+
     // Token validation (Ollama only - OpenAI/Anthropic handle their own limits)
     if (provider === 'ollama') {
       const estimatedTokens = estimateRequestTokens(body);
@@ -215,6 +232,9 @@ async function routeToProvider(req, res) {
     });
 
     // Stream response body back to client
+    // Note: We intentionally skip content-encoding header above (line 210)
+    // This tells Kong the response is NOT compressed, even if upstream sent it compressed
+    // Express will automatically decompress gzipped responses, so Kong receives plain text
     const nodeStream = Readable.fromWeb(response.body);
     nodeStream.pipe(res);
 

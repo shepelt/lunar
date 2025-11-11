@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import { pool } from './db.js';
 // Use Merkle batch implementation
 import { isBlockchainEnabled, getBlockchainStats, logToBlockchain, verifyLog } from './blockchain-merkle.js';
+import { checkAndReload, invalidateCache, getCacheSize, needsReloadFlag } from './pricing.js';
 
 const router = express.Router();
 
@@ -149,11 +150,15 @@ router.get('/quota-check', async (req, res) => {
 // Log LLM usage (called after LLM response)
 router.post('/audit', async (req, res) => {
   try {
+    await checkAndReload();
+
     const {
       provider,
       model,
       prompt_tokens = 0,
       completion_tokens = 0,
+      cache_creation_input_tokens = 0,
+      cache_read_input_tokens = 0,
       status = 'success'
     } = req.body;
 
@@ -164,18 +169,33 @@ router.post('/audit', async (req, res) => {
       return res.status(400).json({ error: 'No consumer information available' });
     }
 
-    const total_tokens = prompt_tokens + completion_tokens;
+    const total_tokens = prompt_tokens + completion_tokens + cache_creation_input_tokens + cache_read_input_tokens;
 
-    // GPT-5 pricing: $1.25/1M input, $10/1M output
-    const cost = (prompt_tokens * 0.00000125) + (completion_tokens * 0.00001);
+    // Use dynamic pricing - reject request if model pricing is not configured
+    let pricing, cost;
+    try {
+      pricing = getPricing(provider, model);
+      cost = calculateCost({
+        prompt_tokens,
+        completion_tokens,
+        cache_creation_input_tokens,
+        cache_read_input_tokens
+      }, pricing);
+    } catch (pricingError) {
+      // Return 422 for unsupported model errors
+      return res.status(422).json({
+        error: 'Unsupported model',
+        message: pricingError.message
+      });
+    }
 
     const id = nanoid();
 
     // Insert usage log
     await pool.query(`
-      INSERT INTO usage_logs (id, consumer_id, provider, model, prompt_tokens, completion_tokens, total_tokens, cost, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-    `, [id, consumerId, provider, model, prompt_tokens, completion_tokens, total_tokens, cost, status]);
+      INSERT INTO usage_logs (id, consumer_id, provider, model, prompt_tokens, completion_tokens, cache_creation_input_tokens, cache_read_input_tokens, total_tokens, cost, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    `, [id, consumerId, provider, model, prompt_tokens, completion_tokens, cache_creation_input_tokens, cache_read_input_tokens, total_tokens, cost, status]);
 
     // Update consumer usage
     await pool.query(`
@@ -263,6 +283,7 @@ router.get('/audit', async (req, res) => {
       SELECT
         id, consumer_id, provider, model,
         prompt_tokens, completion_tokens, total_tokens,
+        cache_creation_input_tokens, cache_read_input_tokens,
         cost, status, blockchain_tx_hash, response_hash,
         EXTRACT(EPOCH FROM created_at) * 1000 as created_at_ms
       FROM usage_logs
@@ -295,6 +316,8 @@ router.get('/audit', async (req, res) => {
       prompt_tokens: row.prompt_tokens,
       completion_tokens: row.completion_tokens,
       total_tokens: row.total_tokens,
+      cache_creation_input_tokens: row.cache_creation_input_tokens || 0,
+      cache_read_input_tokens: row.cache_read_input_tokens || 0,
       cost: parseFloat(row.cost),
       status: row.status,
       blockchain_tx_hash: row.blockchain_tx_hash,
@@ -321,7 +344,7 @@ router.get('/stats/providers', async (req, res) => {
         SUM(total_tokens) as total_tokens,
         SUM(cost) as total_cost
       FROM usage_logs
-      WHERE status = 'success'
+      WHERE status IN ('success', '200')
       GROUP BY provider
       ORDER BY total_cost DESC
     `;
@@ -767,6 +790,204 @@ router.get('/info', async (req, res) => {
   `;
   res.setHeader('Content-Type', 'text/html');
   res.send(html);
+});
+
+// Get all pricing configurations
+router.get('/pricing', async (req, res) => {
+  try {
+    // Check and reload if needed
+    await checkAndReload();
+
+    const result = await pool.query(`
+      SELECT
+        id, provider, model,
+        input_rate, output_rate,
+        cache_write_rate, cache_read_rate,
+        effective_date, created_at, updated_at
+      FROM model_pricing
+      ORDER BY provider, model NULLS FIRST
+    `);
+
+    const pricing = result.rows.map(row => ({
+      id: row.id,
+      provider: row.provider,
+      model: row.model,
+      inputRate: parseFloat(row.input_rate),
+      outputRate: parseFloat(row.output_rate),
+      cacheWriteRate: row.cache_write_rate ? parseFloat(row.cache_write_rate) : null,
+      cacheReadRate: row.cache_read_rate ? parseFloat(row.cache_read_rate) : null,
+      effectiveDate: row.effective_date,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }));
+
+    res.json({
+      pricing,
+      cacheSize: getCacheSize(),
+      needsReload: needsReloadFlag()
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update or create pricing configuration
+router.put('/pricing', async (req, res) => {
+  try {
+    const {
+      provider,
+      model = '',
+      inputRate,
+      outputRate,
+      cacheWriteRate = null,
+      cacheReadRate = null
+    } = req.body;
+
+    if (!provider) {
+      return res.status(400).json({ error: 'Provider is required' });
+    }
+
+    if (inputRate === undefined || outputRate === undefined) {
+      return res.status(400).json({ error: 'inputRate and outputRate are required' });
+    }
+
+    // Upsert pricing
+    const result = await pool.query(`
+      INSERT INTO model_pricing
+        (provider, model, input_rate, output_rate, cache_write_rate, cache_read_rate, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      ON CONFLICT (provider, model) DO UPDATE
+      SET
+        input_rate = $3,
+        output_rate = $4,
+        cache_write_rate = $5,
+        cache_read_rate = $6,
+        updated_at = NOW()
+      RETURNING *
+    `, [provider, model, inputRate, outputRate, cacheWriteRate, cacheReadRate]);
+
+    // Invalidate cache so next request will reload
+    invalidateCache();
+
+    const row = result.rows[0];
+    res.json({
+      id: row.id,
+      provider: row.provider,
+      model: row.model,
+      inputRate: parseFloat(row.input_rate),
+      outputRate: parseFloat(row.output_rate),
+      cacheWriteRate: row.cache_write_rate ? parseFloat(row.cache_write_rate) : null,
+      cacheReadRate: row.cache_read_rate ? parseFloat(row.cache_read_rate) : null,
+      message: 'Pricing updated successfully. Cache will reload on next request.'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Bulk update pricing (replace all pricing with provided array)
+router.put('/pricing/bulk', async (req, res) => {
+  try {
+    const { pricing } = req.body;
+
+    if (!Array.isArray(pricing)) {
+      return res.status(400).json({ error: 'pricing must be an array' });
+    }
+
+    if (pricing.length === 0) {
+      return res.status(400).json({ error: 'pricing array cannot be empty' });
+    }
+
+    // Validate all entries
+    for (const p of pricing) {
+      if (!p.provider || typeof p.provider !== 'string') {
+        return res.status(400).json({ error: 'Each entry must have a valid provider (string)' });
+      }
+      if (typeof p.inputRate !== 'number' || p.inputRate < 0 || !isFinite(p.inputRate)) {
+        return res.status(400).json({ error: 'inputRate must be a non-negative number' });
+      }
+      if (typeof p.outputRate !== 'number' || p.outputRate < 0 || !isFinite(p.outputRate)) {
+        return res.status(400).json({ error: 'outputRate must be a non-negative number' });
+      }
+      if (p.cacheWriteRate !== null && p.cacheWriteRate !== undefined && (typeof p.cacheWriteRate !== 'number' || p.cacheWriteRate < 0 || !isFinite(p.cacheWriteRate))) {
+        return res.status(400).json({ error: 'cacheWriteRate must be null or a non-negative number' });
+      }
+      if (p.cacheReadRate !== null && p.cacheReadRate !== undefined && (typeof p.cacheReadRate !== 'number' || p.cacheReadRate < 0 || !isFinite(p.cacheReadRate))) {
+        return res.status(400).json({ error: 'cacheReadRate must be null or a non-negative number' });
+      }
+    }
+
+    // Start transaction
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Delete all existing pricing
+      await client.query('DELETE FROM model_pricing');
+
+      // Insert all new pricing
+      for (const p of pricing) {
+        await client.query(`
+          INSERT INTO model_pricing
+            (provider, model, input_rate, output_rate, cache_write_rate, cache_read_rate, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        `, [
+          p.provider,
+          p.model || '',
+          p.inputRate,
+          p.outputRate,
+          p.cacheWriteRate || null,
+          p.cacheReadRate || null
+        ]);
+      }
+
+      await client.query('COMMIT');
+
+      // Invalidate cache so next request will reload
+      invalidateCache();
+
+      res.json({
+        message: `Successfully updated ${pricing.length} pricing configurations. Cache will reload on next request.`,
+        count: pricing.length
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete pricing configuration
+router.delete('/pricing/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'DELETE FROM model_pricing WHERE id = $1 RETURNING *',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Pricing not found' });
+    }
+
+    // Invalidate cache
+    invalidateCache();
+
+    res.json({
+      message: 'Pricing deleted successfully',
+      deleted: {
+        provider: result.rows[0].provider,
+        model: result.rows[0].model
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Verify a log entry in the nonce chain

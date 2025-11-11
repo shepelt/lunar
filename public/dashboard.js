@@ -105,6 +105,18 @@ async function fetchProviderStats() {
   }
 }
 
+// Fetch pricing configuration
+async function fetchPricing() {
+  try {
+    const response = await fetch('/admin/api/pricing');
+    if (!response.ok) throw new Error('Failed to fetch pricing');
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching pricing:', error);
+    return { pricing: [] };
+  }
+}
+
 // Render AI Proxy status
 // Update config display (Ollama model name, etc.)
 function updateConfigDisplay(config) {
@@ -370,24 +382,21 @@ function renderProvidersCombined(stats, config) {
       color: 'bg-green-50 border-green-200',
       textColor: 'text-green-700',
       name: 'OpenAI',
-      description: 'GPT-4, GPT-4o, GPT-5',
-      pricing: '$1.25/1M input, $10/1M output'
+      description: 'GPT-4, GPT-4o, GPT-5'
     },
     'anthropic': {
       icon: '🧠',
       color: 'bg-purple-50 border-purple-200',
       textColor: 'text-purple-700',
       name: 'Anthropic',
-      description: 'Claude models (Sonnet, Opus, Haiku)',
-      pricing: '$3/1M input, $15/1M output'
+      description: 'Claude models (Sonnet, Opus, Haiku)'
     },
     'ollama': {
       icon: '🏠',
       color: 'bg-blue-50 border-blue-200',
       textColor: 'text-blue-700',
       name: 'Ollama',
-      description: config.ollama_model || 'gpt-oss:120b',
-      pricing: 'FREE (on-premise)'
+      description: config.ollama_model || 'gpt-oss:120b'
     }
   };
 
@@ -410,7 +419,6 @@ function renderProvidersCombined(stats, config) {
           <div class="flex-1">
             <h3 class="font-bold ${provider.textColor} text-xl">${provider.name}</h3>
             <div class="text-xs text-gray-500 mt-1">${provider.description}</div>
-            <div class="text-xs text-gray-600 mt-1">${provider.pricing}</div>
           </div>
         </div>
 
@@ -440,21 +448,154 @@ function renderProvidersCombined(stats, config) {
   }).join('');
 }
 
+// Render pricing table
+function renderPricingTable(pricingInfo) {
+  const tbody = document.getElementById('pricing-table-body');
+
+  if (!pricingInfo || !pricingInfo.pricing || pricingInfo.pricing.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">No pricing data available</td></tr>';
+    return;
+  }
+
+  // Sort pricing: Anthropic, OpenAI, Ollama
+  const sortOrder = { 'anthropic': 1, 'openai': 2, 'ollama': 3 };
+  const sortedPricing = [...pricingInfo.pricing].sort((a, b) => {
+    return (sortOrder[a.provider] || 99) - (sortOrder[b.provider] || 99);
+  });
+
+  tbody.innerHTML = sortedPricing.map(p => {
+    const inputPrice = (p.inputRate * 1_000_000).toFixed(2);
+    const outputPrice = (p.outputRate * 1_000_000).toFixed(2);
+    const cacheWrite = p.cacheWriteRate ? (p.cacheWriteRate * 1_000_000).toFixed(2) : '-';
+    const cacheRead = p.cacheReadRate ? (p.cacheReadRate * 1_000_000).toFixed(2) : '-';
+    const updated = new Date(p.updatedAt).toLocaleString();
+
+    const providerIcon = {
+      'anthropic': '🧠',
+      'openai': '🤖',
+      'ollama': '🏠'
+    }[p.provider] || '❓';
+
+    const providerName = p.provider.charAt(0).toUpperCase() + p.provider.slice(1);
+    const modelDisplay = p.model && p.model !== ''
+      ? `<span class="text-gray-600"> • ${p.model}</span>`
+      : '<span class="text-gray-400 text-sm"> (default)</span>';
+
+    return `
+      <tr class="border-t hover:bg-gray-50">
+        <td class="px-4 py-3 font-medium">${providerIcon} ${providerName}${modelDisplay}</td>
+        <td class="px-4 py-3 text-right font-mono text-sm">$${inputPrice}</td>
+        <td class="px-4 py-3 text-right font-mono text-sm">$${outputPrice}</td>
+        <td class="px-4 py-3 text-right font-mono text-sm text-gray-600">${cacheWrite}</td>
+        <td class="px-4 py-3 text-right font-mono text-sm text-gray-600">${cacheRead}</td>
+        <td class="px-4 py-3 text-right text-xs text-gray-500">${updated}</td>
+      </tr>
+    `;
+  }).join('');
+
+  // No need to set max-height here since table starts collapsed
+}
+
+// Update pricing via API (bulk update with JSON array)
+async function updatePricingBulk(pricingArray) {
+  try {
+    // Convert $/1M to rate (divide by 1,000,000)
+    const pricing = pricingArray.map(p => ({
+      provider: p.provider,
+      model: p.model || '',
+      inputRate: parseFloat(p.inputRate) / 1_000_000,
+      outputRate: parseFloat(p.outputRate) / 1_000_000,
+      cacheWriteRate: p.cacheWriteRate ? parseFloat(p.cacheWriteRate) / 1_000_000 : null,
+      cacheReadRate: p.cacheReadRate ? parseFloat(p.cacheReadRate) / 1_000_000 : null
+    }));
+
+    const response = await fetch('/admin/api/pricing/bulk', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pricing })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to update pricing');
+    }
+
+    return data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+// Update pricing via API (legacy single update - kept for compatibility)
+async function updatePricing(provider, model, inputRatePer1M, outputRatePer1M, cacheWriteRatePer1M, cacheReadRatePer1M) {
+  try {
+    const body = {
+      provider,
+      model: model || '', // Empty string for default pricing
+      // Convert $/1M to rate (divide by 1,000,000)
+      inputRate: parseFloat(inputRatePer1M) / 1_000_000,
+      outputRate: parseFloat(outputRatePer1M) / 1_000_000
+    };
+
+    // Only include cache rates if they're provided
+    if (cacheWriteRatePer1M) {
+      body.cacheWriteRate = parseFloat(cacheWriteRatePer1M) / 1_000_000;
+    }
+    if (cacheReadRatePer1M) {
+      body.cacheReadRate = parseFloat(cacheReadRatePer1M) / 1_000_000;
+    }
+
+    const response = await fetch('/admin/api/pricing', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to update pricing');
+    }
+
+    return data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+// Show pricing message
+function showPricingMessage(message, isError = false) {
+  const messageDiv = document.getElementById('pricing-message');
+  messageDiv.textContent = message;
+  messageDiv.className = isError
+    ? 'mt-3 p-3 rounded-lg bg-red-100 text-red-800 border border-red-300'
+    : 'mt-3 p-3 rounded-lg bg-green-100 text-green-800 border border-green-300';
+  messageDiv.classList.remove('hidden');
+
+  // Auto-hide after 5 seconds
+  setTimeout(() => {
+    messageDiv.classList.add('hidden');
+  }, 5000);
+}
+
 // Load and refresh dashboard
 async function loadDashboard() {
   const limit = document.getElementById('limit-select').value;
 
-  const [consumers, requests, config, providerStats] = await Promise.all([
+  const [consumers, requests, config, providerStats, pricing] = await Promise.all([
     fetchConsumers(),
     fetchRequests(limit),
     fetchConfig(),
-    fetchProviderStats()
+    fetchProviderStats(),
+    fetchPricing()
   ]);
 
   updateStats(consumers, requests);
   renderConsumersTable(consumers);
   renderRequestsTable(requests);
   renderProvidersCombined(providerStats, config);
+  renderPricingTable(pricing);
   updateBlockchainStatus(config);
 }
 
@@ -572,6 +713,129 @@ document.addEventListener('DOMContentLoaded', () => {
     loadDashboard();
   });
 
+  // Pricing provider change - show/hide cache fields
+  const pricingJsonEditor = document.getElementById('pricing-json-editor');
+
+  // Format JSON button
+  document.getElementById('format-json-btn').addEventListener('click', () => {
+    try {
+      const json = JSON.parse(pricingJsonEditor.value);
+      pricingJsonEditor.value = JSON.stringify(json, null, 2);
+      showPricingMessage('✅ JSON formatted', false);
+      setTimeout(() => {
+        document.getElementById('pricing-message').classList.add('hidden');
+      }, 2000);
+    } catch (error) {
+      showPricingMessage('❌ Invalid JSON: ' + error.message, true);
+    }
+  });
+
+  // Toggle pricing table visibility (start collapsed to save space)
+  let pricingTableExpanded = false;
+  const pricingTableContainer = document.getElementById('pricing-table-container');
+  const pricingChevron = document.getElementById('pricing-chevron');
+
+  // Set initial collapsed state
+  pricingTableContainer.style.maxHeight = '0px';
+  pricingChevron.style.transform = 'rotate(-90deg)';
+
+  document.getElementById('toggle-pricing-table').addEventListener('click', () => {
+    pricingTableExpanded = !pricingTableExpanded;
+
+    if (pricingTableExpanded) {
+      // Recalculate scrollHeight in case content changed
+      pricingTableContainer.style.maxHeight = 'none';
+      const height = pricingTableContainer.scrollHeight;
+      pricingTableContainer.style.maxHeight = '0px';
+      // Trigger reflow
+      pricingTableContainer.offsetHeight;
+      pricingTableContainer.style.maxHeight = height + 'px';
+      pricingChevron.style.transform = 'rotate(0deg)';
+    } else {
+      pricingTableContainer.style.maxHeight = '0px';
+      pricingChevron.style.transform = 'rotate(-90deg)';
+    }
+  });
+
+  // Open pricing modal
+  document.getElementById('open-pricing-modal-btn').addEventListener('click', async () => {
+    document.getElementById('pricing-modal').classList.remove('hidden');
+
+    // Load current pricing as JSON
+    const pricingData = await fetchPricing();
+    if (pricingData && pricingData.pricing) {
+      // Convert to user-friendly format (rates as $/1M)
+      const pricingForEdit = pricingData.pricing.map(p => ({
+        provider: p.provider,
+        model: p.model || '',
+        inputRate: parseFloat((p.inputRate * 1_000_000).toFixed(2)),
+        outputRate: parseFloat((p.outputRate * 1_000_000).toFixed(2)),
+        cacheWriteRate: p.cacheWriteRate ? parseFloat((p.cacheWriteRate * 1_000_000).toFixed(2)) : null,
+        cacheReadRate: p.cacheReadRate ? parseFloat((p.cacheReadRate * 1_000_000).toFixed(2)) : null
+      }));
+
+      pricingJsonEditor.value = JSON.stringify(pricingForEdit, null, 2);
+    }
+  });
+
+  // Close pricing modal
+  const closePricingModal = () => {
+    document.getElementById('pricing-modal').classList.add('hidden');
+  };
+
+  document.getElementById('close-pricing-modal-btn').addEventListener('click', closePricingModal);
+  document.getElementById('cancel-pricing-btn').addEventListener('click', closePricingModal);
+
+  // Close modal when clicking outside
+  document.getElementById('pricing-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'pricing-modal') {
+      closePricingModal();
+    }
+  });
+
+  // Update pricing button
+  document.getElementById('update-pricing-btn').addEventListener('click', async () => {
+    try {
+      // Parse JSON
+      const pricingArray = JSON.parse(pricingJsonEditor.value);
+
+      // Validate
+      if (!Array.isArray(pricingArray)) {
+        throw new Error('Pricing must be an array');
+      }
+
+      if (pricingArray.length === 0) {
+        throw new Error('Pricing array cannot be empty');
+      }
+
+      // Validate each entry
+      for (const p of pricingArray) {
+        if (!p.provider) throw new Error('Each entry must have a provider');
+        if (typeof p.inputRate !== 'number' || p.inputRate < 0) throw new Error('inputRate must be a non-negative number');
+        if (typeof p.outputRate !== 'number' || p.outputRate < 0) throw new Error('outputRate must be a non-negative number');
+      }
+
+      const btn = document.getElementById('update-pricing-btn');
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+
+      await updatePricingBulk(pricingArray);
+
+      showPricingMessage(`✅ Pricing updated successfully (${pricingArray.length} models)! Cache will reload on next request.`);
+
+      // Reload dashboard to show new pricing (keep modal open for further edits)
+      setTimeout(() => {
+        loadDashboard();
+      }, 1500);
+    } catch (error) {
+      showPricingMessage(`❌ ${error.message}`, true);
+    } finally {
+      const btn = document.getElementById('update-pricing-btn');
+      btn.disabled = false;
+      btn.textContent = '💾 Save All Pricing';
+    }
+  });
+
   // Create consumer button
   document.getElementById('create-consumer-btn').addEventListener('click', () => {
     toggleCreateConsumerForm(true);
@@ -675,37 +939,80 @@ document.addEventListener('DOMContentLoaded', () => {
   const testBtn = document.getElementById('test-llm-btn');
   const apiKeyInput = document.getElementById('test-api-key');
   const promptInput = document.getElementById('test-prompt');
-  const endpointSelect = document.getElementById('test-endpoint-select');
-  const modelInput = document.getElementById('test-model-input');
+  const modelSelect = document.getElementById('test-model-select');
   const modelDisplay = document.getElementById('test-model-display');
   const responseContainer = document.getElementById('llm-response-container');
   const errorContainer = document.getElementById('llm-error-container');
 
-  // Default models for each provider
-  const defaultModels = {
-    'openai': 'gpt-5',
-    'anthropic': 'claude-sonnet-4-5-20250929',
-    'ollama': 'gpt-oss:120b'
-  };
+  // Store pricing data for cost calculation
+  let pricingData = [];
+
+  // Load models from pricing API
+  async function loadModels() {
+    try {
+      const data = await fetchPricing();
+      if (data && data.pricing) {
+        pricingData = data.pricing;
+        populateModelDropdown(data.pricing);
+      }
+    } catch (error) {
+      console.error('Failed to load models:', error);
+      modelSelect.innerHTML = '<option value="">Error loading models</option>';
+    }
+  }
+
+  // Populate model dropdown with all available models
+  function populateModelDropdown(pricing) {
+    // Group models by provider
+    const grouped = {};
+    pricing.forEach(p => {
+      if (!grouped[p.provider]) {
+        grouped[p.provider] = [];
+      }
+      grouped[p.provider].push(p);
+    });
+
+    // Clear existing options
+    modelSelect.innerHTML = '';
+
+    // Add options grouped by provider
+    Object.keys(grouped).sort().forEach(provider => {
+      const optgroup = document.createElement('optgroup');
+      optgroup.label = provider.charAt(0).toUpperCase() + provider.slice(1);
+
+      grouped[provider]
+        .sort((a, b) => (a.model || '').localeCompare(b.model || ''))
+        .forEach(p => {
+          const option = document.createElement('option');
+          option.value = `${p.provider}/${p.model || 'default'}`;
+          const modelName = p.model || '(default)';
+          option.textContent = modelName;
+          optgroup.appendChild(option);
+        });
+
+      modelSelect.appendChild(optgroup);
+    });
+
+    // Select first option
+    if (modelSelect.options.length > 0) {
+      modelSelect.selectedIndex = 0;
+      updateModelDisplay();
+    }
+  }
 
   // Update model display
   function updateModelDisplay() {
-    const provider = endpointSelect.value;
-    const model = modelInput.value.trim() || defaultModels[provider];
-    modelDisplay.textContent = `${provider}/${model}`;
+    const selectedValue = modelSelect.value;
+    if (selectedValue) {
+      modelDisplay.textContent = selectedValue;
+    }
   }
 
-  // Initialize model input with default
-  modelInput.value = defaultModels[endpointSelect.value];
-  updateModelDisplay();
+  // Load models on page load
+  loadModels();
 
-  // Update display when provider or model changes
-  endpointSelect.addEventListener('change', () => {
-    modelInput.value = defaultModels[endpointSelect.value];
-    updateModelDisplay();
-  });
-
-  modelInput.addEventListener('input', updateModelDisplay);
+  // Update display when model changes
+  modelSelect.addEventListener('change', updateModelDisplay);
 
   // Load saved API key from localStorage
   const savedApiKey = localStorage.getItem('noosphere_router_test_api_key');
@@ -726,8 +1033,7 @@ document.addEventListener('DOMContentLoaded', () => {
   testBtn.addEventListener('click', async () => {
     const apiKey = apiKeyInput.value.trim();
     const prompt = promptInput.value.trim();
-    const provider = endpointSelect.value;
-    const model = modelInput.value.trim();
+    const selectedModel = modelSelect.value;
 
     // Hide previous results
     responseContainer.classList.add('hidden');
@@ -746,17 +1052,20 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    if (!model) {
+    if (!selectedModel) {
       errorContainer.classList.remove('hidden');
-      document.getElementById('llm-error-text').textContent = 'Please enter a model name';
+      document.getElementById('llm-error-text').textContent = 'Please select a model';
       return;
     }
+
+    // Parse provider/model from dropdown value
+    const [provider, model] = selectedModel.split('/');
 
     try {
       testBtn.disabled = true;
       testBtn.textContent = 'Sending...';
 
-      const result = await testLLM(apiKey, prompt, provider, model);
+      const result = await testLLM(apiKey, prompt, provider, model === 'default' ? '' : model);
 
       // Display response
       const message = result.choices[0]?.message?.content || result.choices[0]?.message?.reasoning || 'No response';
@@ -764,17 +1073,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Display token usage
       const usage = result.usage || {};
-      document.getElementById('llm-prompt-tokens').textContent = formatNumber(usage.prompt_tokens || 0);
-      document.getElementById('llm-completion-tokens').textContent = formatNumber(usage.completion_tokens || 0);
+      const promptTokens = usage.prompt_tokens || usage.input_tokens || 0;
+      const completionTokens = usage.completion_tokens || usage.output_tokens || 0;
+      const cacheCreationTokens = usage.cache_creation_input_tokens || 0;
+      const cacheReadTokens = usage.cache_read_input_tokens || 0;
 
-      // Calculate cost based on provider
+      document.getElementById('llm-prompt-tokens').textContent = formatNumber(promptTokens);
+      document.getElementById('llm-completion-tokens').textContent = formatNumber(completionTokens);
+
+      // Calculate cost using actual pricing data
       let cost = 0;
-      if (provider === 'ollama') {
-        cost = 0; // Local inference is free
+      const pricing = pricingData.find(p =>
+        p.provider === provider &&
+        (p.model === model || (p.model === '' && model === 'default'))
+      );
+
+      if (pricing) {
+        cost = (promptTokens * pricing.inputRate) +
+               (completionTokens * pricing.outputRate) +
+               (cacheCreationTokens * (pricing.cacheWriteRate || 0)) +
+               (cacheReadTokens * (pricing.cacheReadRate || 0));
       } else {
-        // GPT-5 pricing
-        cost = (usage.prompt_tokens * 0.00000125) + (usage.completion_tokens * 0.00001);
+        console.warn('No pricing found for', provider, model);
       }
+
       document.getElementById('llm-cost').textContent = formatCurrency(cost);
 
       responseContainer.classList.remove('hidden');

@@ -3,6 +3,7 @@ import app from './app.js';
 import { initDatabase, testConnection } from './db.js';
 // Use Merkle batch implementation
 import { initBlockchain } from './blockchain-merkle.js';
+import { loadPricing } from './pricing.js';
 
 dotenv.config();
 
@@ -15,6 +16,9 @@ async function start() {
 
     // Initialize database tables
     await initDatabase();
+
+    // Load pricing into memory
+    await loadPricing();
 
     // Initialize blockchain (optional - won't fail if not configured)
     const blockchainInfo = await initBlockchain();

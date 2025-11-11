@@ -37,6 +37,8 @@ export async function initDatabase() {
         prompt_tokens INTEGER,
         completion_tokens INTEGER,
         total_tokens INTEGER,
+        cache_creation_input_tokens INTEGER DEFAULT 0,
+        cache_read_input_tokens INTEGER DEFAULT 0,
         cost DECIMAL(10,6),
         status TEXT,
         request_data TEXT,
@@ -124,6 +126,17 @@ export async function initDatabase() {
         EXCEPTION
           WHEN duplicate_column THEN NULL;
         END;
+        -- Cache token columns for prompt caching
+        BEGIN
+          ALTER TABLE usage_logs ADD COLUMN cache_creation_input_tokens INTEGER DEFAULT 0;
+        EXCEPTION
+          WHEN duplicate_column THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE usage_logs ADD COLUMN cache_read_input_tokens INTEGER DEFAULT 0;
+        EXCEPTION
+          WHEN duplicate_column THEN NULL;
+        END;
       END $$;
     `);
 
@@ -193,6 +206,61 @@ export async function initDatabase() {
         last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Create model_pricing table for dynamic pricing configuration
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS model_pricing (
+        id SERIAL PRIMARY KEY,
+        provider TEXT NOT NULL,
+        model TEXT DEFAULT '',
+        input_rate DECIMAL(15,12),
+        output_rate DECIMAL(15,12),
+        cache_write_rate DECIMAL(15,12),
+        cache_read_rate DECIMAL(15,12),
+        effective_date TIMESTAMP DEFAULT NOW(),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(provider, model)
+      )
+    `);
+
+    // Seed comprehensive pricing if table is empty (prices as of Nov 2025)
+    const pricingCount = await pool.query('SELECT COUNT(*) FROM model_pricing');
+    if (parseInt(pricingCount.rows[0].count) === 0) {
+      await pool.query(`
+        INSERT INTO model_pricing (provider, model, input_rate, output_rate, cache_write_rate, cache_read_rate)
+        VALUES
+          -- Anthropic Claude 4.x models (verified available via API)
+          ('anthropic', 'claude-opus-4-1-20250805', 0.000015, 0.000075, 0.00001875, 0.0000015),
+          ('anthropic', 'claude-opus-4-20250514', 0.000015, 0.000075, 0.00001875, 0.0000015),
+          ('anthropic', 'claude-sonnet-4-5-20250929', 0.000003, 0.000015, 0.00000375, 0.0000003),
+          ('anthropic', 'claude-sonnet-4-20250514', 0.000003, 0.000015, 0.00000375, 0.0000003),
+          ('anthropic', 'claude-haiku-4-5-20251001', 0.000001, 0.000005, 0.00000125, 0.0000001),
+          -- Anthropic Claude 3.x models (verified available via API)
+          ('anthropic', 'claude-3-5-haiku-20241022', 0.0000008, 0.000004, 0.000001, 0.00000008),
+          ('anthropic', 'claude-3-haiku-20240307', 0.00000025, 0.00000125, 0.0000003, 0.000000025),
+
+          -- OpenAI GPT-5 series (use max_completion_tokens instead of max_tokens)
+          ('openai', 'gpt-5', 0.00000125, 0.00001, NULL, 0.000000125),
+          ('openai', 'gpt-5-mini', 0.00000025, 0.000002, NULL, 0.000000025),
+          ('openai', 'gpt-5-nano', 0.00000005, 0.0000004, NULL, 0.000000005),
+          ('openai', 'gpt-5-chat-latest', 0.00000125, 0.00001, NULL, 0.000000125),
+
+          -- OpenAI GPT-4.1 series
+          ('openai', 'gpt-4.1', 0.000002, 0.000008, NULL, 0.0000005),
+          ('openai', 'gpt-4.1-mini', 0.0000004, 0.0000016, NULL, 0.0000001),
+          ('openai', 'gpt-4.1-nano', 0.0000001, 0.0000004, NULL, 0.000000025),
+
+          -- OpenAI GPT-4o series
+          ('openai', 'gpt-4o', 0.0000025, 0.00001, NULL, 0.00000125),
+          ('openai', 'gpt-4o-mini', 0.00000015, 0.0000006, NULL, 0.000000075),
+          ('openai', 'gpt-4o-2024-05-13', 0.000005, 0.000015, NULL, NULL),
+
+          -- Ollama (local, free)
+          ('ollama', 'gpt-oss:120b', 0, 0, NULL, NULL)
+      `);
+      console.log('✅ Seeded comprehensive pricing data (Nov 2025) for all known models');
+    }
 
     console.log('✅ Database tables initialized');
   } catch (error) {

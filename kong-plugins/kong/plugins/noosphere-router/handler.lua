@@ -176,7 +176,7 @@ function NoosphereRouterHandler:body_filter(conf)
     ctx.response_body = {}
   end
 
-  -- Collect chunks (response is compressed, will be decompressed by backend)
+  -- Collect chunks (may be compressed or uncompressed, backend handles both)
   if chunk and #chunk > 0 then
     table.insert(ctx.response_body, chunk)
   end

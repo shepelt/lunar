@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { pool } from './db.js';
 // Use Merkle batch implementation
 import { logToBlockchain, verifyLog } from './blockchain-merkle.js';
+import { checkAndReload, getPricing, calculateCost } from './pricing.js';
 
 const router = express.Router();
 
@@ -40,6 +41,9 @@ router.get('/quota/check/:consumer_id', async (req, res) => {
 // FIXME: More efficient quota logging through batching / memory caching
 router.post('/quota/log', async (req, res) => {
   try {
+    // Check if pricing needs reload
+    await checkAndReload();
+
     const {
       consumer_id,
       provider,
@@ -57,6 +61,8 @@ router.post('/quota/log', async (req, res) => {
     let prompt_tokens = 0;
     let completion_tokens = 0;
     let total_tokens = 0;
+    let cache_creation_input_tokens = 0;
+    let cache_read_input_tokens = 0;
     let cost = 0;
     let requestText = null;
     let responseText = null;
@@ -80,9 +86,19 @@ router.post('/quota/log', async (req, res) => {
     // Extract usage data from response body if provided
     if (response_body_compressed) {
       try {
-        // Decode from base64 (plain text, not gzipped)
+        // Decode from base64
         const responseBuffer = Buffer.from(response_body_compressed, 'base64');
-        responseText = responseBuffer.toString('utf8');
+
+        // Check if response is gzipped (starts with 0x1f8b magic bytes)
+        if (responseBuffer[0] === 0x1f && responseBuffer[1] === 0x8b) {
+          // Decompress gzip
+          const zlib = await import('zlib');
+          const decompressed = zlib.gunzipSync(responseBuffer);
+          responseText = decompressed.toString('utf8');
+        } else {
+          // Plain text
+          responseText = responseBuffer.toString('utf8');
+        }
 
         // Calculate SHA256 hash of response
         responseHash = crypto.createHash('sha256').update(responseText).digest('hex');
@@ -122,7 +138,7 @@ router.post('/quota/log', async (req, res) => {
           try {
             responseData = JSON.parse(responseText);
           } catch (e) {
-            console.warn('Failed to parse as JSON:', e.message);
+            console.warn('Failed to parse response as JSON:', e.message);
           }
         }
 
@@ -130,24 +146,34 @@ router.post('/quota/log', async (req, res) => {
         if (responseData && responseData.usage) {
           // Handle both OpenAI and Anthropic formats
           // OpenAI: prompt_tokens, completion_tokens, total_tokens
-          // Anthropic: input_tokens, output_tokens
+          // Anthropic: input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens
           prompt_tokens = responseData.usage.prompt_tokens || responseData.usage.input_tokens || 0;
           completion_tokens = responseData.usage.completion_tokens || responseData.usage.output_tokens || 0;
           total_tokens = responseData.usage.total_tokens || (prompt_tokens + completion_tokens);
 
-          // Calculate cost based on provider
-          if (provider === 'ollama') {
-            // Local models are free (on-premise inference)
-            cost = 0;
-          } else if (provider === 'anthropic') {
-            // Claude Sonnet 4 pricing (as of 2025)
-            // Input: $3.00 per 1M tokens, Output: $15.00 per 1M tokens
-            cost = (prompt_tokens * 0.000003) + (completion_tokens * 0.000015);
-          } else {
-            // GPT-5 pricing for OpenAI (default)
-            // Input: $1.25 per 1M tokens, Output: $10.00 per 1M tokens
-            cost = (prompt_tokens * 0.00000125) + (completion_tokens * 0.00001);
+          // Extract cache tokens
+          // Anthropic format: cache_creation_input_tokens, cache_read_input_tokens
+          cache_creation_input_tokens = responseData.usage.cache_creation_input_tokens || 0;
+          cache_read_input_tokens = responseData.usage.cache_read_input_tokens || 0;
+
+          // OpenAI format: prompt_tokens_details.cached_tokens
+          if (responseData.usage.prompt_tokens_details?.cached_tokens) {
+            const openai_cached = responseData.usage.prompt_tokens_details.cached_tokens;
+            // For OpenAI: cached tokens are read from cache (discounted rate)
+            // Uncached tokens use regular input rate
+            cache_read_input_tokens = openai_cached;
+            prompt_tokens = prompt_tokens - openai_cached; // Only count uncached as regular prompt tokens
           }
+
+          // Calculate cost using dynamic pricing
+          // Reject request if model pricing is not configured
+          const pricing = getPricing(provider, model);
+          cost = calculateCost({
+            prompt_tokens,
+            completion_tokens,
+            cache_creation_input_tokens,
+            cache_read_input_tokens
+          }, pricing);
         } else {
           console.warn('No usage data in response - estimating from response body size');
           // Estimate tokens from response body when actual usage data is missing
@@ -179,13 +205,15 @@ router.post('/quota/log', async (req, res) => {
 
           total_tokens = prompt_tokens + completion_tokens;
 
-          // Calculate cost with estimated tokens
-          if (provider === 'anthropic') {
-            cost = (prompt_tokens * 0.000003) + (completion_tokens * 0.000015);
-          } else {
-            // OpenAI pricing
-            cost = (prompt_tokens * 0.00000125) + (completion_tokens * 0.00001);
-          }
+          // Calculate cost with estimated tokens using dynamic pricing
+          // Reject request if model pricing is not configured
+          const pricing = getPricing(provider, model);
+          cost = calculateCost({
+            prompt_tokens,
+            completion_tokens,
+            cache_creation_input_tokens: 0,
+            cache_read_input_tokens: 0
+          }, pricing);
 
           console.log(`Estimated usage - input: ${prompt_tokens}, output: ${completion_tokens}, cost: ${cost}`);
         }
@@ -229,12 +257,14 @@ router.post('/quota/log', async (req, res) => {
       total_tokens = prompt_tokens;
 
       // Calculate cost for input tokens only (no output was generated)
-      if (provider === 'anthropic') {
-        cost = prompt_tokens * 0.000003;
-      } else {
-        // OpenAI pricing
-        cost = prompt_tokens * 0.00000125;
-      }
+      // Reject request if model pricing is not configured
+      const pricing = getPricing(provider, model);
+      cost = calculateCost({
+        prompt_tokens,
+        completion_tokens: 0,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0
+      }, pricing);
 
       console.log(`Estimated input-only usage - input: ${prompt_tokens}, cost: ${cost}`);
     }
@@ -258,9 +288,9 @@ router.post('/quota/log', async (req, res) => {
 
     await pool.query(
       `INSERT INTO usage_logs
-        (id, consumer_id, provider, model, prompt_tokens, completion_tokens, total_tokens, cost, status, request_data, response_data, request_hash, response_hash, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())`,
-      [logId, consumer_id, provider, model, prompt_tokens, completion_tokens, total_tokens, cost, statusCode.toString(), requestDataToStore, responseDataToStore, requestHash, responseHash]
+        (id, consumer_id, provider, model, prompt_tokens, completion_tokens, total_tokens, cache_creation_input_tokens, cache_read_input_tokens, cost, status, request_data, response_data, request_hash, response_hash, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())`,
+      [logId, consumer_id, provider, model, prompt_tokens, completion_tokens, total_tokens, cache_creation_input_tokens, cache_read_input_tokens, cost, statusCode.toString(), requestDataToStore, responseDataToStore, requestHash, responseHash]
     );
 
     // Update consumer quota
@@ -289,13 +319,28 @@ router.post('/quota/log', async (req, res) => {
 
     res.json({
       message: 'Usage logged successfully',
-      tokens: { prompt_tokens, completion_tokens, total_tokens },
+      tokens: {
+        prompt_tokens,
+        completion_tokens,
+        total_tokens,
+        cache_creation_input_tokens,
+        cache_read_input_tokens
+      },
       cost,
       request_hash: requestHash,
       response_hash: responseHash
     });
   } catch (error) {
     console.error('Error logging usage:', error);
+
+    // Return 422 for unsupported model errors (pricing not configured)
+    if (error.message && error.message.includes('Unsupported model')) {
+      return res.status(422).json({
+        error: 'Unsupported model',
+        message: error.message
+      });
+    }
+
     res.status(500).json({ error: error.message });
   }
 });
