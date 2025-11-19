@@ -87,6 +87,10 @@ docker save -o "$PACKAGE_DIR/kong-3.9.1.tar" kong:3.9.1
 echo "  - alpine:latest..."
 docker save -o "$PACKAGE_DIR/alpine-latest.tar" alpine:latest
 
+echo "  - tailscale/tailscale:latest..."
+docker pull tailscale/tailscale:latest
+docker save -o "$PACKAGE_DIR/tailscale-latest.tar" tailscale/tailscale:latest
+
 # Step 4: Copy configuration files
 echo "📋 Copying configuration files..."
 cp -r "$PROJECT_ROOT/kong" "$PACKAGE_DIR/"
@@ -95,6 +99,10 @@ cp -r "$PROJECT_ROOT/kong-plugins" "$PACKAGE_DIR/"
 # Copy .env.example (but NOT .env - let deploy script handle that)
 echo "  Copying .env.example..."
 cp "$PROJECT_ROOT/.env.example" "$PACKAGE_DIR/.env.example"
+
+# Copy Tailscale configuration
+echo "  Copying tailscale-serve.json..."
+cp "tailscale-serve.json" "$PACKAGE_DIR/tailscale-serve.json"
 
 # Create modified docker-compose.yml for air-gap deployment
 echo "📝 Creating air-gap docker-compose.yml..."
@@ -144,14 +152,18 @@ docker load -i kong-3.9.1.tar
 echo "  - alpine-latest.tar..."
 docker load -i alpine-latest.tar
 
+echo "  - tailscale-latest.tar..."
+docker load -i tailscale-latest.tar
+
 echo ""
 echo "✅ All Docker images loaded successfully!"
 echo ""
 echo "📋 Next steps:"
 echo "  1. Configure environment: nano .env  (or cp .env.example .env if missing)"
 echo "  2. Start services: docker-compose up -d"
-echo "  3. View logs: docker-compose logs -f"
-echo "  4. Access dashboard: http://localhost:5872"
+echo "  3. (Optional) Start with Tailscale: docker-compose --profile tailscale up -d"
+echo "  4. View logs: docker-compose logs -f"
+echo "  5. Access dashboard: http://localhost:8000/admin"
 echo ""
 EOF
 
